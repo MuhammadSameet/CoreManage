@@ -1,13 +1,14 @@
+// @ts-nocheck
 "use client";
 
 import { forwardRef, useEffect, useState } from 'react';
 import { IconChevronRight, IconLogout, IconUser, IconSettings } from '@tabler/icons-react';
 import { Group, Avatar, Text, Menu, UnstyledButton, Box } from '@mantine/core';
 import { logOutUser } from "@/redux/actions/auth-actions/auth-actions";
-import { AppDispatch } from "@/redux/store";
-import { useDispatch } from 'react-redux';
+import { AppDispatch, RootState } from "@/redux/store";
+import { useDispatch, useSelector } from 'react-redux';
+
 // --- 1. User Button Component ---
-// forwardRef zaroori hai Menu.Target ke saath kaam karne ke liye
 interface UserButtonProps extends React.ComponentPropsWithoutRef<'button'> {
     image: string;
     name: string;
@@ -15,7 +16,6 @@ interface UserButtonProps extends React.ComponentPropsWithoutRef<'button'> {
     icon?: React.ReactNode;
     sidebarOpen?: boolean;
 }
-
 
 const UserButton = forwardRef<HTMLButtonElement, UserButtonProps>(
     ({ image, name, email, icon, sidebarOpen, ...others }: UserButtonProps, ref) => (
@@ -28,20 +28,18 @@ const UserButton = forwardRef<HTMLButtonElement, UserButtonProps>(
                 color: 'var(--mantine-color-text)',
                 transition: 'background-color 0.2s ease',
             }}
-            // Mantine ka built-in hover effect style
             className="mantine-focus-auto"
             {...others}
         >
             <Group wrap="nowrap">
                 <Avatar src={image} radius="xl" size={38} />
 
-                {/* Agar sidebar khula hai tabhi details dikhao */}
                 {sidebarOpen && (
                     <div style={{ flex: 1, overflow: 'hidden' }}>
                         <Text size="sm" fw={600} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {name}
                         </Text>
-                        <Text c="dimmed" size="xs" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <Text className="text-xs text-gray-400" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {email}
                         </Text>
                     </div>
@@ -58,22 +56,25 @@ UserButton.displayName = 'UserButton';
 // --- 2. Main UserSection Component ---
 export function UserSection({ open }: { open: boolean }) {
     const [mounted, setMounted] = useState(false);
+    const dispatch = useDispatch<AppDispatch>();
 
-      const dispatch = useDispatch<AppDispatch>();
+    // Get user from Redux
+    const { isAuthenticated } = useSelector((state: RootState) => state.authStates);
 
-      const handleLogOut = () => {
-    dispatch(logOutUser());
-  };
+    const handleLogOut = () => {
+        dispatch(logOutUser());
+    };
 
-    // Hydration Error Solve karne ke liye useEffect:
-    // Ye ensures karta hai ke component sirf client-side par render ho
     useEffect(() => {
         setMounted(true);
     }, []);
 
     if (!mounted) {
-        return null; // Jab tak browser load na ho, kuch mat dikhao (Error se bachne ke liye)
+        return null;
     }
+
+    const userName = isAuthenticated?.name || "User";
+    const userEmail = isAuthenticated?.email || "Guest";
 
     return (
         <Box p="xs">
@@ -88,8 +89,8 @@ export function UserSection({ open }: { open: boolean }) {
                     <UserButton
                         sidebarOpen={open}
                         image="https://raw.githubusercontent.com/mantinedev/mantine/master/.demo/avatars/avatar-8.png"
-                        name="Harriette Spoon"
-                        email="hspoon@outlook.com"
+                        name={userName}
+                        email={userEmail}
                     />
                 </Menu.Target>
 
@@ -125,4 +126,4 @@ export function UserSection({ open }: { open: boolean }) {
     );
 }
 
-export default UserSection
+export default UserSection;

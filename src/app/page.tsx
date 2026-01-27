@@ -1,12 +1,11 @@
 import React from 'react';
-
+import { UserDashboardSection } from '@/components/dashboard/UserDashboardSection';
 const App = () => {
   return (
-    <div>
-      <h1>Welcome to Firebae with Next JS</h1>
+    <div className="space-y-10">
+      <UserDashboardSection />
     </div>
   );
 }
 
 export default App;
-

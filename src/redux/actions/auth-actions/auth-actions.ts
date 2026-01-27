@@ -10,11 +10,14 @@ interface UserData {
   name?: string;
   email: string;
   password: string;
+  role?: string;
 }
+
+import { fetchAllUsers } from "../user-actions/user-actions";
 
 // Note: Sign up user...!
 const signUpUser = (userData: UserData) => {
-  return async () => {
+  return async (dispatch: any) => {
     console.log("User: ", userData);
 
     try {
@@ -26,17 +29,23 @@ const signUpUser = (userData: UserData) => {
       console.log(createUser);
 
       const saveUserData = {
-        ...userData,
-        uid: createUser?.user?.uid
+        name: userData.name,
+        email: userData.email,
+        uid: createUser?.user?.uid,
+        role: userData.role || 'User'
       }
 
       if (createUser) {
         // Note: Saving data in DB...!
         const firebaseDocRef = await addDoc(collection(db, "Users"), saveUserData);
         console.log("Saved data in DB: ", firebaseDocRef);
+
+        // Note: Refreshing user list to sync UI
+        await dispatch(fetchAllUsers());
       }
     } catch (error: any) {
       console.log("Something wnet wrong while creating user: ", error.message);
+      throw error; // Rethrow to allow component to catch
     }
   };
 };
@@ -80,18 +89,21 @@ const logInUser = (userData: UserData) => {
 // Note: Log out user...!
 const logOutUser = () => {
   return async (dispatch: (arg0: { payload: any; type: "auth/LOG_OUT_USER"; }) => void) => {
-    
-    // Removing user auth from FB authentication...!
-    await signOut(auth);
-  
-    // Removing user from redux...!
-    dispatch(LOG_OUT_USER());
+    try {
+      // Removing user auth from FB authentication...!
+      await signOut(auth);
 
-    // Removing user cookies...!
-    deleteCookie('token');
+      // Removing user from redux...!
+      dispatch(LOG_OUT_USER());
 
-    alert('You have logged out successfully');
-    window.location.reload();
+      // Removing user cookies...!
+      deleteCookie('token');
+
+      // Navigate to home/landing instead of alert/reload
+      window.location.href = '/';
+    } catch (error: any) {
+      console.log("Error logging out: ", error.message);
+    }
   }
 }
 

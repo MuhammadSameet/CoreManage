@@ -2,11 +2,12 @@
 
 import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { FETCH_ALL_USERS } from "@/redux/reducers/user-reducer/user-reducer";
+import { FETCH_ALL_USERS, START_FETCHING_USERS } from "@/redux/reducers/user-reducer/user-reducer";
 import { AppDispatch } from "@/redux/store";
 
 const fetchAllUsers = () => {
   return async (dispatch: any) => {
+    dispatch(START_FETCHING_USERS());
     const fetchUsersFromFB = await getDocs(collection(db, "Users"));
     // console.log('Users: ' , fetchUsersFromFB);
     const users: any[] = [];
@@ -31,10 +32,10 @@ const fetchAllUsers = () => {
     // console.log(targetUsers);
     targetUsers &&
       dispatch(FETCH_ALL_USERS(targetUsers));
-      // dispatch({
-      //   type: FETCH_ALL_USERS,
-      //   payload: targetUsers
-      // });
+    // dispatch({
+    //   type: FETCH_ALL_USERS,
+    //   payload: targetUsers
+    // });
   };
 };
 

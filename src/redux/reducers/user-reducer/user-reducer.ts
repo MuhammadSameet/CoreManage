@@ -10,22 +10,27 @@ interface User {
 
 interface UserState {
   usersList: User[];
+  loading: boolean;
 }
 
-const initialState : UserState= {
+const initialState: UserState = {
   usersList: [],
+  loading: false,
 };
 
 const userSlice = createSlice({
   name: "user",
   initialState: initialState,
   reducers: {
+    START_FETCHING_USERS: (state) => {
+      state.loading = true;
+    },
     FETCH_ALL_USERS: (state, action) => {
-      //   console.log("Users in redux: ", action.payload);
       state.usersList = action.payload;
+      state.loading = false;
     },
   },
 });
 
-export const { FETCH_ALL_USERS } = userSlice.actions;
+export const { FETCH_ALL_USERS, START_FETCHING_USERS } = userSlice.actions;
 export default userSlice.reducer;
