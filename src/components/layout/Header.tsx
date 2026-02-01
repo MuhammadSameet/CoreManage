@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client';
 
 import React from 'react';
@@ -24,6 +23,7 @@ const getPageTitle = (pathname: string) => {
 };
 
 export function Header({ opened, toggle }: HeaderProps) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const pathname = usePathname();
     const title = getPageTitle(pathname);
     const dispatch = useDispatch<AppDispatch>();

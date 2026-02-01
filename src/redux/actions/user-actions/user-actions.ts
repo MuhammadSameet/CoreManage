@@ -4,18 +4,19 @@ import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { FETCH_ALL_USERS, START_FETCHING_USERS } from "@/redux/reducers/user-reducer/user-reducer";
 import { AppDispatch } from "@/redux/store";
+import { User } from "@/redux/reducers/user-reducer/user-reducer";
 
 const fetchAllUsers = () => {
-  return async (dispatch: any) => {
+  return async (dispatch: AppDispatch) => {
     dispatch(START_FETCHING_USERS());
     const fetchUsersFromFB = await getDocs(collection(db, "Users"));
     // console.log('Users: ' , fetchUsersFromFB);
-    const users: any[] = [];
+    const users: User[] = [];
     fetchUsersFromFB.forEach((doc) => {
       //   console.log(doc.id, " => ", doc.data());
 
-      const obj = {
-        ...doc.data(),
+      const obj: User = {
+        ...(doc.data() as Omit<User, 'docId'>), // Cast data to User type, excluding docId
         docId: doc.id,
       };
       users.push(obj);
@@ -23,19 +24,14 @@ const fetchAllUsers = () => {
     // console.log("Users: ", users);
 
     // Target user data...!
-    const targetUsers = [...users].map((itemUser: any) => {
-      //   console.log(itemUser);
-      const { password, ...rest } = itemUser;
+    const targetUsers = [...users].map((itemUser: User) => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password, ...rest } = itemUser; // password is removed here
       return rest;
     });
 
     // console.log(targetUsers);
-    targetUsers &&
-      dispatch(FETCH_ALL_USERS(targetUsers));
-    // dispatch({
-    //   type: FETCH_ALL_USERS,
-    //   payload: targetUsers
-    // });
+    dispatch(FETCH_ALL_USERS(targetUsers));
   };
 };
 
@@ -52,7 +48,7 @@ const deleteUser = (userDocId: string) => {
       dispatch(fetchAllUsers());
 
 
-    } catch (error) {
+    } catch (error: unknown) {
       console.log("Error deleting user:", error);
     }
   };

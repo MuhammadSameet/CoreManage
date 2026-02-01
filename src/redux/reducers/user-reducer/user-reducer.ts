@@ -4,8 +4,12 @@ import { createSlice } from "@reduxjs/toolkit";
 
 interface User {
   docId: string;
-  email?: string;
-  [key: string]: any;
+  uid: string;
+  name: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  password?: string;
 }
 
 interface UserState {

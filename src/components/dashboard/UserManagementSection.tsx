@@ -1,6 +1,5 @@
 import {
     SimpleGrid as MantineSimpleGrid,
-    SimpleGridProps,
     Text as MantineText,
     Loader as MantineLoader,
     Badge as MantineBadge,
@@ -17,15 +16,14 @@ import { fetchAllUsers, deleteUser } from '@/redux/actions/user-actions/user-act
 import { IconSearch, IconFilter, IconTrash } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 
-// Fix for React 19 type incompatibility
-const SimpleGrid = MantineSimpleGrid as React.FC<SimpleGridProps & { children?: React.ReactNode }>;
-const TextInput = MantineTextInput as any;
-const Select = MantineSelect as any;
-const Group = MantineGroup as any;
-const Text = MantineText as any;
-const Loader = MantineLoader as any;
-const Badge = MantineBadge as any;
-const ActionIcon = MantineActionIcon as any;
+const SimpleGrid = MantineSimpleGrid;
+const TextInput = MantineTextInput;
+const Select = MantineSelect;
+const Group = MantineGroup;
+const Text = MantineText;
+const Loader = MantineLoader;
+const Badge = MantineBadge;
+const ActionIcon = MantineActionIcon;
 
 export function UserManagementSection() {
     const dispatch = useDispatch<AppDispatch>();
@@ -63,7 +61,7 @@ export function UserManagementSection() {
                     message: `User ${name} has been successfully removed.`,
                     color: 'red'
                 });
-            } catch (error) {
+            } catch (_error: unknown) {
                 notifications.show({
                     title: 'Error',
                     message: 'Failed to delete user.',

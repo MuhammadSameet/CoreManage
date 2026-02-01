@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { forwardRef, useEffect, useState } from 'react';
@@ -66,6 +65,7 @@ export function UserSection({ open }: { open: boolean }) {
     };
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         setMounted(true);
     }, []);
 

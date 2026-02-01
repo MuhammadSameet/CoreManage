@@ -1,7 +1,6 @@
 'use client';
 import {
     SimpleGrid as MantineSimpleGrid,
-    SimpleGridProps,
     Text as MantineText,
     Button as MantineButton,
     Loader as MantineLoader
@@ -14,11 +13,10 @@ import { fetchAllUsers } from '@/redux/actions/user-actions/user-actions';
 import { useDisclosure } from '@mantine/hooks';
 import { CreationModals } from './CreationModals';
 
-// Fix for React 19 type incompatibility
-const SimpleGrid = MantineSimpleGrid as React.FC<SimpleGridProps & { children?: React.ReactNode; className?: string }>;
-const Text = MantineText as any;
-const Button = MantineButton as any;
-const Loader = MantineLoader as any;
+const SimpleGrid = MantineSimpleGrid;
+const Text = MantineText;
+const Button = MantineButton;
+const Loader = MantineLoader;
 
 export function UserDashboardSection() {
     const dispatch = useDispatch<AppDispatch>();
@@ -34,7 +32,7 @@ export function UserDashboardSection() {
 
     // Dynamic counts
     const totalUsers = usersList.length;
-    const totalEmployeesCount = usersList.filter((u: any) => (u.role || '').toLowerCase().includes('employee') || usersList.indexOf(u) % 2 === 0).length;
+    const totalEmployeesCount = usersList.filter((u) => (u.role || '').toLowerCase().includes('employee') || usersList.indexOf(u) % 2 === 0).length;
 
     if (loading && totalUsers === 0) {
         return <div className="flex justify-center py-20"><Loader size="md" /></div>;

@@ -3,7 +3,6 @@
 import React from 'react';
 import {
     SimpleGrid as MantineSimpleGrid,
-    SimpleGridProps,
     Text as MantineText,
     Badge as MantineBadge,
     Table as MantineTable,
@@ -13,12 +12,12 @@ import {
 import { StatsCard } from '@/components/dashboard/StatsCard';
 import { IconDownload, IconDotsVertical, IconCheck, IconClock, IconAlertCircle } from '@tabler/icons-react';
 
-const SimpleGrid = MantineSimpleGrid as React.FC<SimpleGridProps & { children?: React.ReactNode }>;
-const Table = MantineTable as any;
-const Text = MantineText as any;
-const Paper = MantinePaper as any;
-const Badge = MantineBadge as any;
-const ActionIcon = MantineActionIcon as any;
+const SimpleGrid = MantineSimpleGrid;
+const Table = MantineTable;
+const Text = MantineText;
+const Paper = MantinePaper;
+const Badge = MantineBadge;
+const ActionIcon = MantineActionIcon;
 
 const paymentHistory = [
     { id: '#PAY-8821', user: 'Ama Houton', date: 'Oct 12, 2023', amount: '$1,200', status: 'Completed', method: 'Credit Card' },

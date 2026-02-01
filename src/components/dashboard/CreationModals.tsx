@@ -8,32 +8,27 @@ import {
     Stack as MantineStack,
     Select as MantineSelect,
     Group as MantineGroup,
-    ModalProps,
-    TextInputProps,
-    PasswordInputProps,
-    ButtonProps,
-    StackProps,
-    SelectProps,
-    GroupProps
 } from '@mantine/core';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '@/redux/store';
 import { signUpUser } from '@/redux/actions/auth-actions/auth-actions';
 import { notifications } from '@mantine/notifications';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { createMonthlyDataForUser } from '@/utils/monthlyDataUtils';
 
-// React 19 type fixes - using any as temporary bypass for Mantine 8 / React 19 type alignment issues
-const Modal = MantineModal as any;
-const TextInput = MantineTextInput as any;
-const PasswordInput = MantinePasswordInput as any;
-const Button = MantineButton as any;
-const Stack = MantineStack as any;
-const Select = MantineSelect as any;
-const Group = MantineGroup as any;
+const Modal = MantineModal;
+const TextInput = MantineTextInput;
+const PasswordInput = MantinePasswordInput;
+const Button = MantineButton;
+const Stack = MantineStack;
+const Select = MantineSelect;
+const Group = MantineGroup;
 
 interface CreationModalProps {
     opened: boolean;
     onClose: () => void;
-    type: 'user' | 'employee' | 'attendance';
+    type: 'user' | 'employee' | 'attendance' | 'uploadEntry';
 }
 
 export function CreationModals({ opened, onClose, type }: CreationModalProps) {
@@ -41,13 +36,66 @@ export function CreationModals({ opened, onClose, type }: CreationModalProps) {
     const { usersList } = useSelector((state: RootState) => state.userStates);
     const [loading, setLoading] = useState(false);
 
-    // Form states
-    const [formData, setFormData] = useState({
-        name: '',
-        email: '',
-        password: '',
-        role: type === 'employee' ? 'Employee' : 'User'
+    // Form states for uploadEntry type
+    const [uploadEntryData, setUploadEntryData] = useState({
+        'User ID': '',
+        Username: '',
+        Package: '',
+        Amount: '',
+        Address: '',
+        Password: '',
+        MonthlyFee: '0',
+        Balance: '0',
+        Profit: '0',
+        isPaid: 'unpaid',
+        Date: new Date().toISOString().split('T')[0],
     });
+
+    const handleUploadEntrySubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+
+        try {
+            // Add to uploadEntry collection in Firebase
+            const docRef = await addDoc(collection(db, 'uploadEntry'), {
+                ...uploadEntryData,
+                uploadedAt: serverTimestamp(),
+            });
+
+            // Create corresponding monthly data entry
+            await createMonthlyDataForUser(docRef.id, uploadEntryData);
+
+            notifications.show({
+                title: 'User Created',
+                message: `New user ${uploadEntryData.Username} has been added to the billing system.`,
+                color: 'green'
+            });
+
+            onClose();
+            // Reset form
+            setUploadEntryData({
+                'User ID': '',
+                Username: '',
+                Package: '',
+                Amount: '',
+                Address: '',
+                Password: '',
+                MonthlyFee: '0',
+                Balance: '0',
+                Profit: '0',
+                isPaid: 'unpaid',
+                Date: new Date().toISOString().split('T')[0],
+            });
+        } catch (error: unknown) {
+            notifications.show({
+                title: 'Error',
+                message: error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+                color: 'red'
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -60,25 +108,40 @@ export function CreationModals({ opened, onClose, type }: CreationModalProps) {
                     message: 'Attendance record has been successfully recorded.',
                     color: 'green'
                 });
+            } else if (type === 'uploadEntry') {
+                await handleUploadEntrySubmit(e);
             } else {
                 await dispatch(signUpUser({
-                    name: formData.name,
-                    email: formData.email,
-                    password: formData.password,
-                    role: formData.role
+                    name: uploadEntryData.Username || 'N/A',
+                    email: uploadEntryData['User ID'] || 'N/A',
+                    password: uploadEntryData.Password,
+                    role: 'User'
                 }));
                 notifications.show({
                     title: `${type === 'user' ? 'User' : 'Employee'} Created`,
-                    message: `New ${type === 'user' ? 'user' : 'employee'} ${formData.name} has been added.`,
+                    message: `New ${type === 'user' ? 'user' : 'employee'} ${uploadEntryData.Username || 'N/A'} has been added.`,
                     color: 'blue'
                 });
             }
             onClose();
-            setFormData({ name: '', email: '', password: '', role: type === 'employee' ? 'Employee' : 'User' });
-        } catch (error: any) {
+            // Reset form
+            setUploadEntryData({
+                'User ID': '',
+                Username: '',
+                Package: '',
+                Amount: '',
+                Address: '',
+                Password: '',
+                MonthlyFee: '0',
+                Balance: '0',
+                Profit: '0',
+                isPaid: 'unpaid',
+                Date: new Date().toISOString().split('T')[0],
+            });
+        } catch (error: unknown) {
             notifications.show({
                 title: 'Error',
-                message: error.message || 'Something went wrong. Please try again.',
+                message: error instanceof Error ? error.message : 'Something went wrong. Please try again.',
                 color: 'red'
             });
         } finally {
@@ -89,8 +152,101 @@ export function CreationModals({ opened, onClose, type }: CreationModalProps) {
     const modalTitle = {
         user: 'Create New User',
         employee: 'Create New Employee',
-        attendance: 'Add Attendance Record'
+        attendance: 'Add Attendance Record',
+        uploadEntry: 'Create New Billing Entry'
     }[type];
+
+    if (type === 'uploadEntry') {
+        return (
+            <Modal opened={opened} onClose={onClose} title={modalTitle} centered radius="md" size="lg">
+                <form onSubmit={handleSubmit}>
+                    <Stack gap="md">
+                        <TextInput
+                            required
+                            label="User ID"
+                            placeholder="Enter User ID"
+                            value={uploadEntryData['User ID']}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUploadEntryData({ ...uploadEntryData, 'User ID': e.target.value })}
+                        />
+                        <TextInput
+                            required
+                            label="Username"
+                            placeholder="Enter Username"
+                            value={uploadEntryData.Username}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUploadEntryData({ ...uploadEntryData, Username: e.target.value })}
+                        />
+                        <TextInput
+                            required
+                            label="Package"
+                            placeholder="Enter Package"
+                            value={uploadEntryData.Package}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUploadEntryData({ ...uploadEntryData, Package: e.target.value })}
+                        />
+                        <TextInput
+                            required
+                            label="Amount"
+                            placeholder="Enter Amount"
+                            value={uploadEntryData.Amount}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUploadEntryData({ ...uploadEntryData, Amount: e.target.value })}
+                        />
+                        <TextInput
+                            required
+                            label="Address"
+                            placeholder="Enter Address"
+                            value={uploadEntryData.Address}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUploadEntryData({ ...uploadEntryData, Address: e.target.value })}
+                        />
+                        <PasswordInput
+                            required
+                            label="Password"
+                            placeholder="Enter Password"
+                            value={uploadEntryData.Password}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUploadEntryData({ ...uploadEntryData, Password: e.target.value })}
+                        />
+                        <TextInput
+                            required
+                            label="Monthly Fee"
+                            placeholder="Enter Monthly Fee"
+                            value={uploadEntryData.MonthlyFee}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUploadEntryData({ ...uploadEntryData, MonthlyFee: e.target.value })}
+                        />
+                        <TextInput
+                            label="Balance"
+                            placeholder="Enter Balance (default 0)"
+                            value={uploadEntryData.Balance}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUploadEntryData({ ...uploadEntryData, Balance: e.target.value })}
+                        />
+                        <TextInput
+                            label="Profit"
+                            placeholder="Enter Profit (default 0)"
+                            value={uploadEntryData.Profit}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUploadEntryData({ ...uploadEntryData, Profit: e.target.value })}
+                        />
+                        <Select
+                            label="Payment Status"
+                            placeholder="Select Payment Status"
+                            data={['paid', 'unpaid']}
+                            value={uploadEntryData.isPaid}
+                            onChange={(val: string | null) => setUploadEntryData({ ...uploadEntryData, isPaid: val || 'unpaid' })}
+                        />
+                        <TextInput
+                            label="Date"
+                            type="date"
+                            value={uploadEntryData.Date}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUploadEntryData({ ...uploadEntryData, Date: e.target.value })}
+                        />
+
+                        <Group justify="flex-end" mt="md">
+                            <Button variant="default" onClick={onClose} disabled={loading}>Cancel</Button>
+                            <Button type="submit" className="bg-[#1e40af]" loading={loading}>
+                                Create Billing Entry
+                            </Button>
+                        </Group>
+                    </Stack>
+                </form>
+            </Modal>
+        );
+    }
 
     return (
         <Modal opened={opened} onClose={onClose} title={modalTitle} centered radius="md" size="md">
@@ -102,22 +258,22 @@ export function CreationModals({ opened, onClose, type }: CreationModalProps) {
                                 required
                                 label="Full Name"
                                 placeholder="Enter full name"
-                                value={formData.name}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, name: e.target.value })}
+                                value={uploadEntryData.Username}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUploadEntryData({ ...uploadEntryData, Username: e.target.value })}
                             />
                             <TextInput
                                 required
                                 label="Email Address"
                                 placeholder="hello@example.com"
-                                value={formData.email}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, email: e.target.value })}
+                                value={uploadEntryData['User ID']}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUploadEntryData({ ...uploadEntryData, 'User ID': e.target.value })}
                             />
                             <PasswordInput
                                 required
                                 label="Password"
                                 placeholder="Create a password"
-                                value={formData.password}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, password: e.target.value })}
+                                value={uploadEntryData.Password}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUploadEntryData({ ...uploadEntryData, Password: e.target.value })}
                             />
                             {type === 'employee' && (
                                 <Select
@@ -125,7 +281,7 @@ export function CreationModals({ opened, onClose, type }: CreationModalProps) {
                                     placeholder="Select department"
                                     data={['Sales', 'Support', 'Development', 'Management']}
                                     defaultValue="Sales"
-                                    onChange={(val: string) => setFormData({ ...formData, role: `Employee - ${val}` })}
+                                    onChange={(val: string | null) => setUploadEntryData({ ...uploadEntryData, 'User ID': `Employee - ${val || 'Sales'}` })}
                                 />
                             )}
                         </>
@@ -137,7 +293,7 @@ export function CreationModals({ opened, onClose, type }: CreationModalProps) {
                                 required
                                 label="Select Employee"
                                 placeholder="Pick an employee"
-                                data={usersList.map((u: any) => u.name || u.email)}
+                                data={usersList.map((u) => u.name || u.email)}
                             />
                             <Select
                                 required

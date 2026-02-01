@@ -1,7 +1,7 @@
 // (Only run on Next JS Server)
 
 import { NextResponse, NextRequest } from "next/server";
-import { publicRoutes, privateRoutes } from "./utils/routes";
+import { publicRoutes } from "./utils/routes";
 
 function middleware(req: NextRequest) {
 

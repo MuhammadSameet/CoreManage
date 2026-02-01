@@ -1,14 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
-import { NavLink, Text, Tooltip, ScrollArea as MantineScrollArea, ScrollAreaProps, rem, UnstyledButton, Group as MantineGroup, GroupProps, Collapse as MantineCollapse, CollapseProps, Box, ActionIcon } from '@mantine/core';
+import { Text, Tooltip, ScrollArea as MantineScrollArea, UnstyledButton, Group as MantineGroup, Collapse as MantineCollapse, Box, ActionIcon } from '@mantine/core';
 import {
     IconLayoutDashboard,
     IconUsers,
     IconUserShield,
-    IconSettings,
     IconWallet,
-    IconChevronRight,
     IconChevronLeft,
     IconChevronDown,
     IconMenu2
@@ -16,9 +14,9 @@ import {
 import { usePathname, useRouter } from 'next/navigation';
 
 // Fix for React 19 type incompatibility
-const Group = MantineGroup as React.FC<GroupProps & { children?: React.ReactNode }>;
-const Collapse = MantineCollapse as React.FC<CollapseProps & { children?: React.ReactNode }>;
-const ScrollArea = MantineScrollArea as React.FC<ScrollAreaProps & { children?: React.ReactNode; className?: string }>;
+const Group = MantineGroup;
+const Collapse = MantineCollapse;
+const ScrollArea = MantineScrollArea;
 
 interface SidebarProps {
     opened: boolean;
@@ -37,10 +35,37 @@ interface NavItem {
 
 const mockData: NavItem[] = [
     { label: 'Dashboard', icon: IconLayoutDashboard, link: '/' },
-    { label: 'User Management', icon: IconUsers, link: '/users' },
-    { label: 'Payments', icon: IconWallet, link: '/payments' },
-    { label: 'Employee Management', icon: IconUserShield, link: '/employees' },
-    { label: 'Settings', icon: IconSettings, link: '/settings' },
+    {
+        label: 'User Management',
+        icon: IconUsers,
+        initiallyOpened: false,
+        links: [
+            { label: 'Users Directory', link: '/users' },
+            { label: 'Roles & Permissions', link: '/users/roles' },
+            { label: 'All USers', link: '/users/search' },
+            { label: 'Upload Entry', link: '/users/uploadentry' },
+        ]
+    },
+    {
+        label: 'Financial Hub',
+        icon: IconWallet,
+        initiallyOpened: false,
+        links: [
+            { label: 'Transaction Logs', link: '/payments' },
+            { label: 'Revenue Analytics', link: '/stats-demo' },
+            { label: 'Invoice Settings', link: '/settings' },
+        ]
+    },
+    {
+        label: 'Staff Portal',
+        icon: IconUserShield,
+        initiallyOpened: false,
+        links: [
+            { label: 'Organization Roster', link: '/employees' },
+            { label: 'Attendance Center', link: '/employees' },
+            { label: 'Leave Management', link: '/employees' },
+        ]
+    },
 ];
 
 export function Sidebar({ opened, toggle, isMobile, closeMobile }: SidebarProps) {
@@ -96,18 +121,21 @@ export function Sidebar({ opened, toggle, isMobile, closeMobile }: SidebarProps)
 
                     {/* Sub-menu items */}
                     <Collapse in={isSubOpen && opened}>
-                        <div className="pl-9 pr-2 pb-2 space-y-0.5">
+                        <div className="pl-9 pr-2 pb-3 space-y-1 relative before:content-[''] before:absolute before:left-5 before:top-0 before:bottom-3 before:w-[1px] before:bg-white/20">
                             {item.links?.map((subItem) => (
                                 <UnstyledButton
-                                    key={subItem.link}
+                                    key={subItem.label}
                                     onClick={() => handleNavigate(subItem.link)}
-                                    className={`w-full py-2 px-3 rounded-md text-xs block transition-all
+                                    className={`w-full py-2 px-4 rounded-lg text-[13px] text-left block transition-all relative
                                         ${pathname === subItem.link
-                                            ? 'bg-white/20 text-white font-bold'
-                                            : 'text-white/60 hover:bg-white/10 hover:text-white'
+                                            ? 'bg-white/20 text-white font-bold shadow-soft'
+                                            : 'text-white/70 hover:bg-white/10 hover:text-white font-medium'
                                         }`}
                                 >
-                                    {subItem.label}
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-1.5 h-1.5 rounded-full transition-all ${pathname === subItem.link ? 'bg-white scale-100' : 'bg-white/30 scale-50'}`} />
+                                        {subItem.label}
+                                    </div>
                                 </UnstyledButton>
                             ))}
                         </div>
@@ -165,7 +193,7 @@ export function Sidebar({ opened, toggle, isMobile, closeMobile }: SidebarProps)
             {/* Scrollable Content */}
             <ScrollArea className="flex-1 p-3">
                 <div className="space-y-1">
-                    {links.map((link, index) => {
+                    {links.map((link, _index) => {
                         // Re-styling the generated links in a mapping would be cleaner, 
                         // but let's assume 'links' variable is already mapped correctly above.
                         // Wait, 'links' is a JSX array. I should probably adjust the mapping logic itself.

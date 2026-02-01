@@ -8,7 +8,10 @@ const publicRoutes: string[] = [
 const privateRoutes: string[] = [
     '/home',
     '/about',
-    '/users'
+    '/users',
+    '/users/roles',
+    '/users/profile',
+    '/users/activity'
 ];
 
 export {

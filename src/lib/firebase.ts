@@ -4,7 +4,6 @@ import { initializeApp } from "firebase/app";
 
 import { getAuth } from "firebase/auth"; // for authentication
 import { getFirestore } from "firebase/firestore"; // for firestore database
-import { getStorage } from "firebase/storage"; // for firebase storage
 
 // Your web app's Firebase configuration
 // const firebaseConfig = {

@@ -1,53 +1,50 @@
-import { Box, NavLink, Text, ThemeIcon, rem } from '@mantine/core';
-import { IconLayoutDashboard, IconWallet, IconUsers, IconUserShield, IconSettings, IconCircleFilled } from '@tabler/icons-react';
+'use client';
 
-export function Sidebar() {
-    return (
-        <div className="w-64 h-screen bg-[#113a8f] text-white flex flex-col fixed left-0 top-0 overflow-y-auto">
-            {/* Logo Section */}
-            <div className="p-6 flex items-center gap-3">
-                <IconCircleFilled className="text-white" size={24} />
-                <Text className="text-xl font-bold tracking-wide">CMS</Text>
-            </div>
+import { useState } from 'react';
+import { FileInput, Button, Flex } from '@mantine/core';
+import { IconFileSpreadsheet, IconSend } from '@tabler/icons-react';
 
-            {/* Navigation */}
-            <div className="flex-1 px-4 py-4 space-y-1">
-                <div className="mb-2">
-                    <NavLink
-                        label="Dashboard"
-                        leftSection={<IconLayoutDashboard size={18} />}
-                        active
-                        variant="filled"
-                        className="rounded-md font-medium data-[active=true]:bg-white data-[active=true]:text-[#113a8f] text-blue-100 hover:bg-blue-800 hover:text-white"
-                        styles={{ root: { padding: '10px 16px' } }}
-                    />
-                </div>
+export default function FileUploadRow() {
+  const [file, setFile] = useState<File | null>(null);
 
-                <NavLink
-                    label="Payments"
-                    leftSection={<IconWallet size={18} />}
-                    className="rounded-md font-medium text-blue-100 hover:bg-blue-800 hover:text-white mb-1"
-                    styles={{ root: { padding: '10px 16px' } }}
-                />
-                <NavLink
-                    label="Users Management"
-                    leftSection={<IconUsers size={18} />}
-                    className="rounded-md font-medium text-blue-100 hover:bg-blue-800 hover:text-white mb-1"
-                    styles={{ root: { padding: '10px 16px' } }}
-                />
-                <NavLink
-                    label="Employee Management"
-                    leftSection={<IconUserShield size={18} />}
-                    className="rounded-md font-medium text-blue-100 hover:bg-blue-800 hover:text-white mb-1"
-                    styles={{ root: { padding: '10px 16px' } }}
-                />
-                <NavLink
-                    label="Settings"
-                    leftSection={<IconSettings size={18} />}
-                    className="rounded-md font-medium text-blue-100 hover:bg-blue-800 hover:text-white mb-1"
-                    styles={{ root: { padding: '10px 16px' } }}
-                />
-            </div>
+  // Sidebar theme color
+  const themeColor = '#113a8f';
+
+  return (
+    <div className="w-full">
+      <Flex
+        gap="md"
+        align="center"
+        className={`w-full flex-col md:flex-row bg-white dark:bg-gray-900 p-5 rounded-2xl border border-[${themeColor}] shadow-sm`}
+      >
+        {/* File Upload */}
+        <div className="w-full">
+          <FileInput
+            value={file}
+            onChange={setFile}
+            placeholder="Upload Excel file"
+            leftSection={<IconFileSpreadsheet size={16} />}
+            accept=".xlsx,.xls"
+            radius="md"
+            size="md"
+            classNames={{
+              root: 'w-full',
+              input: `h-[46px] border-[${themeColor}] dark:bg-gray-900 dark:text-white`,
+            }}
+          />
         </div>
-    );
+
+        {/* Submit Button */}
+        <Button
+          leftSection={<IconSend size={16} />}
+          radius="lg"
+          size="md"
+          disabled={!file}
+          className={`w-full md:w-[190px] h-[46px] bg-[${themeColor}] hover:bg-[#0e3179] text-white shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200 disabled:bg-gray-400 disabled:shadow-none disabled:cursor-not-allowed border-[${themeColor}]`}
+        >
+          Submit
+        </Button>
+      </Flex>
+    </div>
+  );
 }

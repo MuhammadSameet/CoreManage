@@ -9,14 +9,15 @@ import { setCookie } from "cookies-next";
 import { MantineProvider, MantineThemeOverride } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import '@mantine/notifications/styles.css';
+import { ToastContainer } from 'react-toastify';
 import { useDispatch } from "react-redux";
 import { AppDispatch } from "@/redux/store";
 import { LOGIN_USER, LOG_OUT_USER } from "@/redux/reducers/auth-reducer/auth-reducer";
 
-const theme = {
-    colorScheme: 'light' as 'light',
+const theme: MantineThemeOverride = {
+    colorScheme: 'light',
     primaryColor: 'blue',
-} as MantineThemeOverride;
+};
 
 function AuthInit({ children }: { children: React.ReactNode }) {
     const dispatch = useDispatch<AppDispatch>();
@@ -29,7 +30,8 @@ function AuthInit({ children }: { children: React.ReactNode }) {
 
                 dispatch(LOGIN_USER({
                     email: user.email,
-                    uid: user.uid
+                    uid: user.uid,
+                    name: user.displayName
                 }));
             } else {
                 dispatch(LOG_OUT_USER());
@@ -46,6 +48,18 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     return (
         <MantineProvider theme={theme}>
             <Notifications position="top-right" zIndex={1000} />
+            <ToastContainer
+                position="top-right"
+                autoClose={3000}
+                hideProgressBar={false}
+                newestOnTop={true}
+                closeOnClick
+                rtl={false}
+                pauseOnFocusLoss
+                draggable
+                pauseOnHover
+                theme="light"
+            />
             <Provider store={store}>
                 <AuthInit>
                     {children}

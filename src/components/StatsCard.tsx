@@ -1,4 +1,5 @@
-import { Paper, Text, Button, Group, Box } from '@mantine/core';
+"use client";
+import { Paper, Text, Button } from '@mantine/core';
 import { IconChevronRight } from '@tabler/icons-react';
 
 interface StatsCardProps {

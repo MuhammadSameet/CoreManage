@@ -13,17 +13,17 @@ import {
     Stack as MantineStack,
     Select as MantineSelect
 } from '@mantine/core';
-import { IconUser, IconBell, IconShieldLock, IconPalette, IconCloudUpload } from '@tabler/icons-react';
+import { IconBell, IconShieldLock, IconPalette, IconCloudUpload } from '@tabler/icons-react';
 
-const Text = MantineText as any;
-const Group = MantineGroup as any;
-const TextInput = MantineTextInput as any;
-const Button = MantineButton as any;
-const Stack = MantineStack as any;
-const Select = MantineSelect as any;
-const Paper = MantinePaper as any;
-const Switch = MantineSwitch as any;
-const Divider = MantineDivider as any;
+const Text = MantineText;
+const Group = MantineGroup;
+const TextInput = MantineTextInput;
+const Button = MantineButton;
+const Stack = MantineStack;
+const Select = MantineSelect;
+const Paper = MantinePaper;
+const Switch = MantineSwitch;
+const Divider = MantineDivider;
 
 export default function SettingsPage() {
     return (
