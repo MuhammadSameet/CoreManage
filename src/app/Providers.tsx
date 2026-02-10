@@ -15,7 +15,6 @@ import { AppDispatch } from "@/redux/store";
 import { LOGIN_USER, LOG_OUT_USER } from "@/redux/reducers/auth-reducer/auth-reducer";
 
 const theme: MantineThemeOverride = {
-    colorScheme: 'light',
     primaryColor: 'blue',
 };
 

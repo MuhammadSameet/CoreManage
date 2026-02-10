@@ -6,6 +6,9 @@ interface UserPayload {
     email: string | null;
     uid: string;
     name: string | null;
+    role?: string;
+    username?: string;
+    password?: string;
     dp?: string | null;
 }
 

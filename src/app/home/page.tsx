@@ -43,7 +43,7 @@ export default function HomePage() {
           <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[120%] bg-indigo-600 rounded-full blur-[150px] opacity-10" />
           <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
             <div className="max-w-xl text-center md:text-left">
-              <Group gap="xs" mb="xs" justify={{ base: 'center', md: 'flex-start' }}>
+              <Group gap="xs" mb="xs" className="justify-center md:justify-start">
                 <ThemeIcon variant="light" color="indigo" radius="md">
                   <IconRocket size={18} />
                 </ThemeIcon>

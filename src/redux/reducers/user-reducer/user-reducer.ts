@@ -38,3 +38,4 @@ const userSlice = createSlice({
 
 export const { FETCH_ALL_USERS, START_FETCHING_USERS } = userSlice.actions;
 export default userSlice.reducer;
+export type { User };

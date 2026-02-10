@@ -13,18 +13,20 @@ import {
     Divider,
     Stack as MantineStack,
     Box,
-    Title as MantineTitle
+    Title as MantineTitle,
+    Select as MantineSelect
 } from '@mantine/core';
-import { useDispatch } from "react-redux";
-import { AppDispatch } from "@/redux/store";
+import { useDispatch, useSelector } from "react-redux";
+import { AppDispatch, RootState } from "@/redux/store";
 import { logInUser } from '@/redux/actions/auth-actions/auth-actions';
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { setCookie } from "cookies-next";
 import { LOGIN_USER } from "@/redux/reducers/auth-reducer/auth-reducer";
-import { IconBrandGoogle, IconLock, IconAt, IconCircleCheckFilled } from '@tabler/icons-react';
+import { IconBrandGoogle, IconLock, IconAt, IconUser, IconCircleCheckFilled } from '@tabler/icons-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { notifications } from '@mantine/notifications';
 const MImage = Image;
 
 // React 19 type fixes
@@ -36,13 +38,15 @@ const MText = MantineText;
 const MGroup = MantineGroup;
 const MStack = MantineStack;
 const MTitle = MantineTitle;
+const MSelect = MantineSelect;
 
 const provider = new GoogleAuthProvider()
 
 const LogIn = () => {
     const [formStates, setFormStates] = useState({
-        email: "",
+        identifier: "", // Changed to identifier to accept email or username
         password: "",
+        userType: "user", // Change to userType to include user/employee/admin
         loading: false
     });
 
@@ -50,8 +54,9 @@ const LogIn = () => {
 
     const clearAllStates = () => {
         setFormStates({
-            email: "",
+            identifier: "",
             password: "",
+            userType: "user",
             loading: false
         });
     }
@@ -59,8 +64,33 @@ const LogIn = () => {
     const logInHandler = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
         setFormStates(prev => ({ ...prev, loading: true }));
+        
+        // Determine if the identifier is an email or username
+        const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formStates.identifier);
+        const email = isEmail ? formStates.identifier : '';
+        const username = !isEmail ? formStates.identifier : '';
+        
         try {
-            await dispatch(logInUser({ email: formStates.email, password: formStates.password }));
+            // For Firebase auth, we need to use email, so if it's not an email format, we'll need to find the user first
+            // For now, we'll assume it's an email since Firebase auth requires email/password
+            await dispatch(logInUser({ email: formStates.identifier, password: formStates.password }));
+            
+            // Redirect based on user type after successful login
+            if (formStates.userType === 'admin') {
+                window.location.href = '/'; // Default to home for now
+            } else if (formStates.userType === 'employee') {
+                window.location.href = '/'; // Default to home for now
+            } else {
+                window.location.href = '/'; // Default to home for now
+            }
+        } catch (error: any) {
+            // Show toast notification for invalid email/password
+            notifications.show({
+                title: 'Login Failed',
+                message: error?.message || 'Invalid email, username or password. Please try again.',
+                color: 'red',
+                position: 'top-right'
+            });
         } finally {
             setFormStates(prev => ({ ...prev, loading: false }));
             clearAllStates();
@@ -190,11 +220,11 @@ const LogIn = () => {
                         <form onSubmit={logInHandler}>
                             <MStack gap="sm">
                                 <TextInput
-                                    label="Corporate Email"
-                                    placeholder="name@company.com"
+                                    label="Email or Username"
+                                    placeholder="name@company.com or username"
                                     required
-                                    value={formStates.email}
-                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormStates({ ...formStates, email: e.target.value })}
+                                    value={formStates.identifier}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormStates({ ...formStates, identifier: e.target.value })}
                                     radius="md"
                                     size="xs"
                                     leftSection={<IconAt size={16} className="text-indigo-500" />}
@@ -213,6 +243,26 @@ const LogIn = () => {
                                     radius="md"
                                     size="xs"
                                     leftSection={<IconLock size={16} className="text-indigo-500" />}
+                                    className="font-bold"
+                                    styles={{
+                                        input: { height: '38px', border: '1.2px solid #f8fafc', '&:focus': { borderColor: '#6366f1' } },
+                                        label: { marginBottom: '3px', fontSize: '11px', color: '#94a3b8' }
+                                    }}
+                                />
+
+                                <MSelect
+                                    label="User Type"
+                                    placeholder="Select your user type"
+                                    required
+                                    value={formStates.userType}
+                                    onChange={(value) => setFormStates({ ...formStates, userType: value || 'user' })}
+                                    radius="md"
+                                    size="xs"
+                                    data={[
+                                        { value: 'user', label: 'User' },
+                                        { value: 'employee', label: 'Employee' },
+                                        { value: 'admin', label: 'Admin' },
+                                    ]}
                                     className="font-bold"
                                     styles={{
                                         input: { height: '38px', border: '1.2px solid #f8fafc', '&:focus': { borderColor: '#6366f1' } },

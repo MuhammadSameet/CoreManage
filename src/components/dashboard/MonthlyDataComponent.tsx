@@ -24,6 +24,11 @@ export default function MonthlyDataComponent() {
   const [editingItem, setEditingItem] = useState<MonthlyData | null>(null);
   const [selectedUser, setSelectedUser] = useState<{id: string, name: string} | null>(null);
   const [paymentAmount, setPaymentAmount] = useState(0);
+  // New state variables for the enhanced payment modal
+  const [paidPaymentModalOpen, setPaidPaymentModalOpen] = useState(false);
+  const [currentItem, setCurrentItem] = useState<MonthlyData | null>(null);
+  const [paidAmount, setPaidAmount] = useState(0);
+  const [balanceAmount, setBalanceAmount] = useState(0);
   const [alertMessage, setAlertMessage] = useState<{type: 'success' | 'error', message: string} | null>(null);
   
   const [formData, setFormData] = useState<Omit<MonthlyData, 'id'>>({
@@ -95,7 +100,7 @@ export default function MonthlyDataComponent() {
   // Handle save changes
   const handleSave = async () => {
     try {
-      if (editingItem) {
+      if (editingItem && editingItem.id) {
         // Update existing document
         const docRef = doc(db, 'monthlydata', editingItem.id);
         await updateDoc(docRef, {
@@ -248,6 +253,8 @@ export default function MonthlyDataComponent() {
   // Open payment modal for a user
   const openPaymentModal = async (userId: string) => {
     try {
+      if (!userId) return;
+      
       const user = uploadEntries.find(entry => entry.id === userId);
       if (!user) return;
       
@@ -262,6 +269,66 @@ export default function MonthlyDataComponent() {
     } catch (error) {
       console.error('Error opening payment modal: ', error);
       showAlert('error', 'Failed to open payment modal. Please try again.');
+    }
+  };
+
+  // Open the new "Paid Payment" modal for a specific item
+  const openPaidPaymentModal = (item: MonthlyData) => {
+    setCurrentItem(item);
+    setPaidAmount(item.balance); // Default to the current balance
+    setBalanceAmount(item.balance - item.balance); // Balance after payment
+    setPaidPaymentModalOpen(true);
+  };
+
+  // Handle paid amount change and calculate balance
+  const handlePaidAmountChange = (amount: number) => {
+    setPaidAmount(amount);
+    if (currentItem) {
+      const calculatedBalance = currentItem.balance - amount;
+      setBalanceAmount(calculatedBalance < 0 ? 0 : calculatedBalance);
+    }
+  };
+
+  // Handle paid payment form submission
+  const handlePaidPaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault(); // Prevent default form submission
+    
+    if (!currentItem) {
+      showAlert('error', 'No item selected for payment');
+      return;
+    }
+
+    // Validate that paid amount doesn't exceed total amount
+    if (paidAmount > currentItem.balance) {
+      showAlert('error', 'Paid amount cannot exceed the total payable amount');
+      return;
+    }
+
+    try {
+      // Update the monthly data in Firestore
+      const docRef = doc(db, 'monthlydata', currentItem.id!);
+      await updateDoc(docRef, {
+        balance: balanceAmount,
+        isPaid: balanceAmount === 0,
+        paidByTime: new Date().toISOString(),
+      });
+
+      // Refresh data
+      const monthlyQuery = query(collection(db, 'monthlydata'), orderBy('createdAt', 'desc'));
+      const monthlySnapshot = await getDocs(monthlyQuery);
+      const monthlyResults: MonthlyData[] = [];
+
+      monthlySnapshot.forEach((doc) => {
+        monthlyResults.push({ id: doc.id, ...doc.data() } as MonthlyData);
+      });
+
+      setMonthlyData(monthlyResults);
+      setPaidPaymentModalOpen(false);
+      setCurrentItem(null);
+      showAlert('success', `Payment of Rs. ${paidAmount} processed successfully!`);
+    } catch (error) {
+      console.error('Error processing paid payment: ', error);
+      showAlert('error', 'Failed to process payment. Please try again.');
     }
   };
 
@@ -384,7 +451,7 @@ export default function MonthlyDataComponent() {
                     <Menu.Dropdown>
                       {!item.isPaid && (
                         <Menu.Item
-                          onClick={() => handleMarkAsPaid(item.id)}
+                          onClick={() => item.id && handleMarkAsPaid(item.id)}
                           leftSection={<IconCash size={14} />}
                           color="green"
                         >
@@ -392,11 +459,18 @@ export default function MonthlyDataComponent() {
                         </Menu.Item>
                       )}
                       <Menu.Item
-                        onClick={() => openPaymentModal(item.id_user)}
+                        onClick={() => item.id_user && openPaymentModal(item.id_user)}
                         leftSection={<IconCash size={14} />}
                         color="blue"
                       >
                         Process Payment
+                      </Menu.Item>
+                      <Menu.Item
+                        onClick={() => openPaidPaymentModal(item)}
+                        leftSection={<IconCash size={14} />}
+                        color="blue"
+                      >
+                        Paid Payment
                       </Menu.Item>
                       <Menu.Item
                         onClick={() => handleEdit(item)}
@@ -405,7 +479,7 @@ export default function MonthlyDataComponent() {
                         Edit
                       </Menu.Item>
                       <Menu.Item
-                        onClick={() => handleDelete(item.id)}
+                        onClick={() => item.id && handleDelete(item.id)}
                         leftSection={<IconTrash size={14} />}
                         color="red"
                       >
@@ -471,77 +545,86 @@ export default function MonthlyDataComponent() {
             }))}
           />
 
-          <Input
-            label="Name"
-            placeholder="Enter name"
-            value={formData.name}
-            onChange={(e) => handleInputChange('name', e.target.value)}
-          />
+          <Input.Wrapper label="Name">
+            <Input
+              placeholder="Enter name"
+              value={formData.name}
+              onChange={(e) => handleInputChange('name', e.target.value)}
+            />
+          </Input.Wrapper>
 
-          <Input
-            label="User ID"
-            placeholder="Enter user ID"
-            value={formData.id_user}
-            onChange={(e) => handleInputChange('id_user', e.target.value)}
-          />
+          <Input.Wrapper label="User ID">
+            <Input
+              placeholder="Enter user ID"
+              value={formData.id_user}
+              onChange={(e) => handleInputChange('id_user', e.target.value)}
+            />
+          </Input.Wrapper>
 
-          <Input
-            label="Monthly Fee"
-            placeholder="Enter monthly fee"
-            type="number"
-            value={formData.monthlyFee.toString()}
-            onChange={(e) => {
-              const value = parseFloat(e.target.value) || 0;
-              handleInputChange('monthlyFee', value);
-              handleInputChange('balance', value); // Update balance when monthly fee changes
-              handleInputChange('totalAmount', value);
-            }}
-          />
+          <Input.Wrapper label="Monthly Fee">
+            <Input
+              placeholder="Enter monthly fee"
+              type="number"
+              value={formData.monthlyFee.toString()}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value) || 0;
+                handleInputChange('monthlyFee', value);
+                handleInputChange('balance', value); // Update balance when monthly fee changes
+                handleInputChange('totalAmount', value);
+              }}
+            />
+          </Input.Wrapper>
 
-          <Input
-            label="Balance"
-            placeholder="Enter balance"
-            type="number"
-            value={formData.balance.toString()}
-            onChange={(e) => handleInputChange('balance', parseFloat(e.target.value) || 0)}
-          />
+          <Input.Wrapper label="Balance">
+            <Input
+              placeholder="Enter balance"
+              type="number"
+              value={formData.balance.toString()}
+              onChange={(e) => handleInputChange('balance', parseFloat(e.target.value) || 0)}
+            />
+          </Input.Wrapper>
 
-          <Input
-            label="Advance"
-            placeholder="Enter advance"
-            type="number"
-            value={formData.advance.toString()}
-            onChange={(e) => handleInputChange('advance', parseFloat(e.target.value) || 0)}
-          />
+          <Input.Wrapper label="Advance">
+            <Input
+              placeholder="Enter advance"
+              type="number"
+              value={formData.advance.toString()}
+              onChange={(e) => handleInputChange('advance', parseFloat(e.target.value) || 0)}
+            />
+          </Input.Wrapper>
 
-          <Input
-            label="Profit"
-            placeholder="Enter profit"
-            type="number"
-            value={formData.profit.toString()}
-            onChange={(e) => handleInputChange('profit', parseFloat(e.target.value) || 0)}
-          />
+          <Input.Wrapper label="Profit">
+            <Input
+              placeholder="Enter profit"
+              type="number"
+              value={formData.profit.toString()}
+              onChange={(e) => handleInputChange('profit', parseFloat(e.target.value) || 0)}
+            />
+          </Input.Wrapper>
 
-          <Input
-            label="Month Year (YYYY-MM)"
-            placeholder="Enter month year"
-            value={formData.monthYear}
-            onChange={(e) => handleInputChange('monthYear', e.target.value)}
-          />
+          <Input.Wrapper label="Month Year (YYYY-MM)">
+            <Input
+              placeholder="Enter month year"
+              value={formData.monthYear}
+              onChange={(e) => handleInputChange('monthYear', e.target.value)}
+            />
+          </Input.Wrapper>
 
-          <Input
-            label="Start Date"
-            type="date"
-            value={formData.startDate}
-            onChange={(e) => handleInputChange('startDate', e.target.value)}
-          />
+          <Input.Wrapper label="Start Date">
+            <Input
+              type="date"
+              value={formData.startDate}
+              onChange={(e) => handleInputChange('startDate', e.target.value)}
+            />
+          </Input.Wrapper>
 
-          <Input
-            label="End Date"
-            type="date"
-            value={formData.endDate}
-            onChange={(e) => handleInputChange('endDate', e.target.value)}
-          />
+          <Input.Wrapper label="End Date">
+            <Input
+              type="date"
+              value={formData.endDate}
+              onChange={(e) => handleInputChange('endDate', e.target.value)}
+            />
+          </Input.Wrapper>
 
           <Group justify="right" mt="md">
             <Button
@@ -574,13 +657,14 @@ export default function MonthlyDataComponent() {
         <div className="space-y-4">
           <Text size="sm">Current Outstanding Amount: <strong>Rs. {paymentAmount}</strong></Text>
           
-          <Input
-            label="Payment Amount"
-            placeholder="Enter payment amount"
-            type="number"
-            value={paymentAmount.toString()}
-            onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
-          />
+          <Input.Wrapper label="Payment Amount">
+            <Input
+              placeholder="Enter payment amount"
+              type="number"
+              value={paymentAmount.toString()}
+              onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
+            />
+          </Input.Wrapper>
           
           <Group justify="right" mt="md">
             <Button
@@ -597,6 +681,63 @@ export default function MonthlyDataComponent() {
             </Button>
           </Group>
         </div>
+      </Modal>
+      
+      {/* Paid Payment Modal */}
+      <Modal
+        opened={paidPaymentModalOpen}
+        onClose={() => setPaidPaymentModalOpen(false)}
+        title="Paid Payment"
+        size="md"
+      >
+        <form onSubmit={handlePaidPaymentSubmit}>
+          <div className="space-y-4">
+            <Input.Wrapper label="Total Payable Amount (Read-only)">
+              <Input
+                placeholder="Total amount"
+                type="number"
+                value={currentItem?.balance.toString() || '0'}
+                readOnly
+                disabled
+              />
+            </Input.Wrapper>
+            
+            <Input.Wrapper label="Paid Amount">
+              <Input
+                placeholder="Enter paid amount"
+                type="number"
+                value={paidAmount.toString()}
+                onChange={(e) => handlePaidAmountChange(parseFloat(e.target.value) || 0)}
+              />
+            </Input.Wrapper>
+            
+            <Input.Wrapper label="Balance Amount">
+              <Input
+                placeholder="Calculated balance"
+                type="number"
+                value={balanceAmount.toString()}
+                readOnly
+                disabled
+              />
+            </Input.Wrapper>
+            
+            <Group justify="right" mt="md">
+              <Button
+                variant="default"
+                type="button"
+                onClick={() => setPaidPaymentModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                Submit Payment
+              </Button>
+            </Group>
+          </div>
+        </form>
       </Modal>
     </div>
   );

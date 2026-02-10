@@ -9,12 +9,13 @@ import {
     Paper as MantinePaper,
     Table as MantineTable,
     Badge as MantineBadge,
+    LoadingOverlay,
 } from '@mantine/core';
 import { IconFileSpreadsheet, IconEye, IconUpload, IconCheck, IconClock, IconX } from '@tabler/icons-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { db } from '@/lib/firebase';
-import { collection, doc, getDocs, addDoc, updateDoc, query, where, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { createUserOrUpdateData } from '@/services/userDataService';
 import { createMonthlyDataForUser } from '@/utils/monthlyDataUtils';
@@ -44,7 +45,7 @@ const StatusBadge = ({ status }: { status: string }) => {
     );
 };
 
-export function UploadEntryClient() {
+export function NewUploadEntryClient() {
     const [file, setFile] = useState<File | null>(null);
     const [parsedData, setParsedData] = useState<DataRow[]>([]);
     const [loading, setLoading] = useState(false);
@@ -154,7 +155,7 @@ export function UploadEntryClient() {
         setLoading(false);
     };
 
-    // Submit button handler - Save data to Firebase
+    // Submit button handler - Save data to Firebase using new structure
     const handleSubmit = async () => {
         if (parsedData.length === 0) {
             toast.error('No data to upload. Please preview the file first!');
@@ -162,7 +163,7 @@ export function UploadEntryClient() {
         }
 
         setLoading(true);
-        toast.info('Uploading data to Firebase...');
+        toast.info('Uploading data to Firebase with new structure...');
 
         try {
             // Process each row using the new data structure
@@ -170,7 +171,7 @@ export function UploadEntryClient() {
                 // Process the row with the new user data structure
                 await createUserOrUpdateData(row);
 
-                // Also add to the legacy uploadEntry collection for compatibility
+                // Also add to the legacy uploadEntry collection for compatibility with existing features
                 const { paid, isPaid, status, Price, price, Profit, profit, Total, total, ...cleanRow } = row; // Remove unwanted fields
                 const dataToUpload = {
                     ...cleanRow,
@@ -182,42 +183,15 @@ export function UploadEntryClient() {
                     uploadedAt: serverTimestamp(),
                 };
 
-                // Check if a document with the same user ID already exists in uploadEntry
-                const userId = (dataToUpload as Record<string, any>)['User ID'] || (dataToUpload as Record<string, any>)['Username'] || (dataToUpload as Record<string, any>)['username'] || (dataToUpload as Record<string, any>)['id'] || (dataToUpload as Record<string, any>)['ID'];
-                
-                if (userId) {
-                    // Query for existing document with the same user ID
-                    const q = query(collection(db, 'uploadEntry'), where('id', '==', userId));
-                    const querySnapshot = await getDocs(q);
-                    
-                    if (!querySnapshot.empty) {
-                        // If document exists, update it instead of creating a new one
-                        const existingDoc = querySnapshot.docs[0];
-                        const docRef = doc(db, 'uploadEntry', existingDoc.id);
-                        await updateDoc(docRef, dataToUpload);
-                        return docRef;
-                    } else {
-                        // If document doesn't exist, create a new one
-                        const docRef = await addDoc(collection(db, 'uploadEntry'), dataToUpload);
-                        
-                        // Create corresponding monthly data entry
-                        await createMonthlyDataForUser(docRef.id, dataToUpload);
-                        
-                        return docRef;
-                    }
-                } else {
-                    // If no user ID is provided, create a new document
-                    const docRef = await addDoc(collection(db, 'uploadEntry'), dataToUpload);
-                    
-                    // Create corresponding monthly data entry
-                    await createMonthlyDataForUser(docRef.id, dataToUpload);
-                    
-                    return docRef;
-                }
+                // Add to uploadEntry collection
+                const docRef = await addDoc(collection(db, 'uploadEntry'), dataToUpload);
+
+                // Create corresponding monthly data entry
+                await createMonthlyDataForUser(docRef.id, dataToUpload);
             });
 
             await Promise.all(uploadPromises);
-            toast.success(`Successfully uploaded ${parsedData.length} records to Firebase! 🎉`);
+            toast.success(`Successfully uploaded ${parsedData.length} records to Firebase with new structure! 🎉`);
 
             // Reset state
             setFile(null);
@@ -231,11 +205,11 @@ export function UploadEntryClient() {
         setLoading(false);
     };
 
-    // Filter columns to hide Price, Profit, Total
+    // Filter columns to hide certain fields in preview
     const getFilteredColumns = () => {
         if (parsedData.length === 0) return [];
         const allColumns = Object.keys(parsedData[0]);
-        const hiddenColumns = ['Price', 'Profit', 'Total', 'price', 'profit', 'total'];
+        const hiddenColumns = ['Price', 'Profit', 'Total', 'price', 'profit', 'total', 'uploadedAt'];
         return allColumns.filter(col => !hiddenColumns.includes(col));
     };
 
@@ -251,7 +225,7 @@ export function UploadEntryClient() {
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
             {/* Header */}
             <div className="flex justify-between items-center">
-                <Text className="text-2xl font-bold text-gray-800">Upload Entry</Text>
+                <Text className="text-2xl font-bold text-gray-800">Upload Entry (New Structure)</Text>
             </div>
 
             {/* File Upload Section */}
@@ -261,9 +235,9 @@ export function UploadEntryClient() {
                 <Flex
                     gap="md"
                     align="center"
-                    className="w-full flex-col md:flex-row"
+                    className="w-full flex-col sm:flex-row"
                 >
-                    <div className="w-full">
+                    <div className="w-full sm:w-auto flex-1 max-w-full sm:max-w-[400px]">
                         <FileInput
                             value={file}
                             onChange={(newFile) => {
@@ -283,14 +257,14 @@ export function UploadEntryClient() {
                         />
                     </div>
 
-                    <Flex gap="sm" className="w-full md:w-auto">
+                    <Flex gap="sm" className="w-full sm:w-auto mt-2 sm:mt-0">
                         <Button
                             leftSection={<IconEye size={16} />}
                             radius="lg"
                             size="md"
                             disabled={!file || loading}
                             onClick={handlePreview}
-                            className="flex-1 md:flex-none h-[46px] bg-[#1e40af] hover:bg-[#1e3a8a] text-white shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200 disabled:bg-gray-400 disabled:shadow-none disabled:cursor-not-allowed"
+                            className="w-full sm:w-auto h-[46px] bg-[#1e40af] hover:bg-[#1e3a8a] text-white shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200 disabled:bg-gray-400 disabled:shadow-none disabled:cursor-not-allowed"
                         >
                             {loading && !showPreview ? 'Loading...' : 'Preview'}
                         </Button>
@@ -301,7 +275,7 @@ export function UploadEntryClient() {
                             size="md"
                             disabled={parsedData.length === 0 || loading}
                             onClick={handleSubmit}
-                            className="flex-1 md:flex-none h-[46px] bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200 disabled:bg-gray-400 disabled:shadow-none disabled:cursor-not-allowed"
+                            className="w-full sm:w-auto h-[46px] bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200 disabled:bg-gray-400 disabled:shadow-none disabled:cursor-not-allowed"
                         >
                             {loading && showPreview ? 'Uploading...' : 'Submit'}
                         </Button>
@@ -311,112 +285,116 @@ export function UploadEntryClient() {
 
             {/* Preview Table - Modern UI Design */}
             {showPreview && parsedData.length > 0 && (
-                <div>
-                    <div className="flex items-center justify-between mb-4">
-                        <Text className="text-xl font-bold text-gray-800">
-                            📊 Data Preview
-                        </Text>
-                        <div className="px-4 py-2 bg-blue-50 rounded-lg border border-blue-200">
-                            <Text className="text-sm font-semibold text-blue-700">
-                                {parsedData.length} Records Found
-                            </Text>
+                <div className="w-full">
+                    <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
+                        <div className="w-full flex-1 min-w-0">
+                            <div className="w-full flex flex-col md:flex-row md:items-center gap-2">
+                                <Text className="text-xl font-bold text-gray-800 break-words">
+                                    Data Preview
+                                </Text>
+                                <Badge color="blue" variant="light" className="text-xs px-3 py-1 flex-shrink-0 mt-1 md:mt-0">
+                                    {parsedData.length} {parsedData.length === 1 ? 'record' : 'records'}
+                                </Badge>
+                            </div>
                         </div>
+                        <Text className="text-sm text-gray-500 text-left md:text-right mt-1 md:mt-0 w-auto">
+                            Showing {parsedData.length} record{parsedData.length !== 1 ? 's' : ''}
+                        </Text>
                     </div>
 
-                    <Paper radius="lg" withBorder className="overflow-hidden border-gray-200 shadow-lg">
-                        <div className="overflow-x-auto">
-                            <Table verticalSpacing="md" horizontalSpacing="lg" className="min-w-[900px]">
-                                <Table.Thead className="bg-gradient-to-r from-blue-50 to-indigo-50">
-                                    <Table.Tr>
-                                        <Table.Th className="text-gray-500 font-bold text-xs uppercase tracking-wider py-4 border-b-2 border-blue-200">
-                                            #
-                                        </Table.Th>
-                                        {getFilteredColumns().map((key) => (
-                                            <Table.Th key={key} className="text-gray-500 font-bold text-xs uppercase tracking-wider py-4 border-b-2 border-blue-200">
-                                                {key}
-                                            </Table.Th>
-                                        ))}
-                                    </Table.Tr>
-                                </Table.Thead>
-                                <Table.Tbody>
-                                    {getDisplayData().slice(0, 50).map((row, index) => (
-                                        <Table.Tr
-                                            key={index}
-                                            className="hover:bg-gradient-to-r hover:from-blue-50/30 hover:to-indigo-50/30 transition-all duration-200 border-b border-gray-100"
-                                        >
-                                            <Table.Td className="font-bold text-blue-600 py-4">
-                                                {index + 1}
-                                            </Table.Td>
-                                            {getFilteredColumns().map((key) => {
-                                                const value = row[key as keyof typeof row];
-
-                                                // Special formatting for isPaid/status
-                                                if (key.toLowerCase() === 'ispaid' || key.toLowerCase() === 'status') {
-                                                    return (
-                                                        <Table.Td key={key} className="py-4">
-                                                            <StatusBadge status={String(value)} />
-                                                        </Table.Td>
-                                                    );
-                                                }
-
-                                                // Money fields
-                                                if (key.toLowerCase().includes('fee') || key.toLowerCase().includes('payment') || key.toLowerCase().includes('amount') || key.toLowerCase().includes('balance')) {
-                                                    return (
-                                                        <Table.Td key={key} className="py-4">
-                                                            <div className="flex items-center gap-1">
-                                                                <span className="text-xs text-gray-400">Rs.</span>
-                                                                <span className="font-bold text-gray-900 text-sm">{value || '0'}</span>
-                                                            </div>
-                                                        </Table.Td>
-                                                    );
-                                                }
-
-                                                // Name/ID fields
-                                                if (key.toLowerCase().includes('name') || key.toLowerCase().includes('user') || key.toLowerCase().includes('id')) {
-                                                    return (
-                                                        <Table.Td key={key} className="py-4">
-                                                            <Text size="sm" fw={600} className="text-gray-800">
-                                                                {value || 'N/A'}
-                                                            </Text>
-                                                        </Table.Td>
-                                                    );
-                                                }
-
-                                                // Date fields
-                                                if (key.toLowerCase().includes('date')) {
-                                                    return (
-                                                        <Table.Td key={key} className="py-4">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-sm text-gray-600">{value || '-'}</span>
-                                                            </div>
-                                                        </Table.Td>
-                                                    );
-                                                }
-
-                                                // Default
-                                                return (
-                                                    <Table.Td key={key} className="text-gray-600 text-sm py-4">
-                                                        {value || '-'}
-                                                    </Table.Td>
-                                                );
-                                            })}
+                    {/* Responsive table container - Always show table with horizontal scrolling */}
+                    <div className="border border-gray-200 rounded-lg overflow-hidden w-full">
+                        <div className="overflow-x-auto overflow-y-visible">
+                            <Paper radius="md" withBorder className="overflow-hidden border-0 border-b border-gray-100 shadow-sm w-full">
+                                <Table verticalSpacing="md" horizontalSpacing="lg" className="w-full min-w-max">
+                                    <Table.Thead className="bg-gray-50/50">
+                                        <Table.Tr>
+                                            <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[40px] xs:min-w-[50px] sm:min-w-[60px]">#</Table.Th>
+                                            {getFilteredColumns().map((key) => (
+                                                <Table.Th key={key} className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[80px] xs:min-w-[90px] sm:min-w-[100px]">
+                                                    {key}
+                                                </Table.Th>
+                                            ))}
                                         </Table.Tr>
-                                    ))}
-                                </Table.Tbody>
-                            </Table>
+                                    </Table.Thead>
+                                    <Table.Tbody>
+                                        {getDisplayData().slice(0, 50).map((row, index) => (
+                                            <Table.Tr
+                                                key={index}
+                                                className="hover:bg-gray-50/50 transition-colors border-b border-gray-100 last:border-b-0"
+                                            >
+                                                <Table.Td className="font-bold text-blue-600 py-2 px-1 xs:px-2 sm:px-4 min-w-[40px] xs:min-w-[50px] sm:min-w-[60px]">
+                                                    {index + 1}
+                                                </Table.Td>
+                                                {getFilteredColumns().map((key) => {
+                                                    const value = row[key as keyof typeof row];
+
+                                                    // Special formatting for isPaid/status
+                                                    if (key.toLowerCase() === 'ispaid' || key.toLowerCase() === 'status') {
+                                                        return (
+                                                            <Table.Td key={key} className="py-2 px-1 xs:px-2 sm:px-4 min-w-[80px] xs:min-w-[90px] sm:min-w-[100px] truncate">
+                                                                <StatusBadge status={String(value)} />
+                                                            </Table.Td>
+                                                        );
+                                                    }
+
+                                                    // Money fields
+                                                    if (key.toLowerCase().includes('fee') || key.toLowerCase().includes('payment') || key.toLowerCase().includes('amount') || key.toLowerCase().includes('balance')) {
+                                                        return (
+                                                            <Table.Td key={key} className="py-2 px-1 xs:px-2 sm:px-4 min-w-[80px] xs:min-w-[90px] sm:min-w-[100px] truncate">
+                                                                <div className="flex items-center gap-1">
+                                                                    <span className="text-xs text-gray-400">Rs.</span>
+                                                                    <span className="font-bold text-gray-900 text-sm">{value || '0'}</span>
+                                                                </div>
+                                                            </Table.Td>
+                                                        );
+                                                    }
+
+                                                    // Name/ID fields
+                                                    if (key.toLowerCase().includes('name') || key.toLowerCase().includes('user') || key.toLowerCase().includes('id')) {
+                                                        return (
+                                                            <Table.Td key={key} className="py-2 px-1 xs:px-2 sm:px-4 min-w-[80px] xs:min-w-[90px] sm:min-w-[100px] truncate">
+                                                                <Text size="sm" fw={600} className="text-gray-800">
+                                                                    {value || 'N/A'}
+                                                                </Text>
+                                                            </Table.Td>
+                                                        );
+                                                    }
+
+                                                    // Date fields
+                                                    if (key.toLowerCase().includes('date')) {
+                                                        return (
+                                                            <Table.Td key={key} className="py-2 px-1 xs:px-2 sm:px-4 min-w-[80px] xs:min-w-[90px] sm:min-w-[100px] truncate">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-sm text-gray-600">{value || '-'}</span>
+                                                                </div>
+                                                            </Table.Td>
+                                                        );
+                                                    }
+
+                                                    // Default
+                                                    return (
+                                                        <Table.Td key={key} className="text-gray-600 text-sm py-2 px-1 xs:px-2 sm:px-4 min-w-[80px] xs:min-w-[90px] sm:min-w-[100px] truncate">
+                                                            {value || '-'}
+                                                        </Table.Td>
+                                                    );
+                                                })}
+                                            </Table.Tr>
+                                        ))}
+                                    </Table.Tbody>
+                                </Table>
+                            </Paper>
                         </div>
-                        {parsedData.length > 50 && (
-                            <div className="p-4 bg-gradient-to-r from-gray-50 to-blue-50 text-center border-t border-gray-200">
-                                <Text className="text-sm text-gray-600 font-medium">
-                                    📄 Showing first 50 records out of <span className="font-bold text-blue-600">{parsedData.length}</span> total records
-                                </Text>
-                            </div>
-                        )}
-                    </Paper>
+                    </div>
+                    {parsedData.length > 50 && (
+                        <div className="p-4 bg-gradient-to-r from-gray-50 to-blue-50 text-center border-t border-gray-200">
+                            <Text className="text-sm text-gray-600 font-medium">
+                                📄 Showing first 50 records out of <span className="font-bold text-blue-600">{parsedData.length}</span> total records
+                            </Text>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
     );
 }
-
-

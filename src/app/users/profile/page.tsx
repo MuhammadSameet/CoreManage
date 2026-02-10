@@ -47,7 +47,7 @@ export default function ProfilePage() {
                                 </Grid.Col>
                             </Grid>
 
-                            <TextInput label="Email Address" defaultValue={isAuthenticated?.email} disabled radius="md" />
+                            <TextInput label="Email Address" defaultValue={isAuthenticated?.email || ''} disabled radius="md" />
                             <TextInput label="Corporate ID" defaultValue={`EMP-${isAuthenticated?.uid?.slice(0, 6).toUpperCase()}`} disabled radius="md" />
 
                             <Group justify="flex-end" mt="xl">

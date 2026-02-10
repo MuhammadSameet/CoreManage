@@ -1,386 +1,342 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { CreationModals } from '@/components/dashboard/CreationModals';
-import { Button, TextInput, Select, Card, Text, Badge, LoadingOverlay, Table, Paper, ActionIcon, Menu, Modal, Input, Group, Tabs } from '@mantine/core';
-import { IconSearch, IconPlus, IconUser, IconId, IconMapPin, IconX, IconDotsVertical, IconCheck, IconPencil, IconCash, IconTrash, IconCalendar } from '@tabler/icons-react';
+import { Button, TextInput, Text, Badge, LoadingOverlay, Table, Paper, ActionIcon, Modal, Input, Group, Divider, Menu, Select } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
+import { IconSearch, IconDotsVertical, IconX, IconCalendar, IconCoin, IconUser, IconId, IconPencil, IconTrash, IconPlus } from '@tabler/icons-react';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where, orderBy, doc, updateDoc, deleteDoc, addDoc } from 'firebase/firestore';
-import MonthlyDataComponent from '@/components/dashboard/MonthlyDataComponent';
-import { updateUserDataInBothCollections, deleteUserDataFromBothCollections } from '@/services/syncService';
+import { collection, getDocs, query, where, orderBy, doc, updateDoc, deleteDoc, addDoc, getDoc } from 'firebase/firestore';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
 
-// Define the data type for upload entry
-type UploadEntry = {
-  id: string;
-  [key: string]: any; // Allow dynamic properties
-};
-
-// Define the data type for monthly data
-type MonthlyData = {
-  id: string;
-  name: string;
-  id_user: string;
-  monthlyFee: number;
-  balance: number;
-  advance: number;
-  isPaid: boolean;
-  profit: number;
+// Define the data type for user
+type User = {
+  id: string; // Firebase document ID
+  name: string; // Name that user can edit
+  username: string; // CSV username which serves as user ID
+  address: string;
   startDate: string;
-  endDate: string;
-  monthYear: string;
-  totalAmount: number;
-  createdAt: Date | any; // Could be Firestore timestamp
-  [key: string]: any; // Allow dynamic properties
+  totalAmount: number; // Final payment amount user needs to pay
+  balance: number; // Remaining amount after payments
+  isPaid: boolean;
+  monthlyFees: number;
+  package: string;
+  phone: string;
+  totalPayment: number; // Total payment (balance + monthly fees)
+  recordType: 'user' | 'payment';
+  [key: string]: unknown; // Allow dynamic properties
 };
 
-export default function SearchPage() {
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+export default function UploadEntrySearchTable() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchField, setSearchField] = useState<'username' | 'userid' | 'address' | 'all'>('all');
-  const [searchResults, setSearchResults] = useState<(UploadEntry | MonthlyData)[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [noResults, setNoResults] = useState(false);
-  const [editingItem, setEditingItem] = useState<UploadEntry | MonthlyData | null>(null);
-  const [editForm, setEditForm] = useState<Record<string, any>>({});
-  const [activeTab, setActiveTab] = useState('uploadEntry');
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editForm, setEditForm] = useState<Partial<User>>({});
+  const [isNewUserModalOpen, setIsNewUserModalOpen] = useState(false);
+  const [newUserForm, setNewUserForm] = useState<Omit<User, 'id' | 'totalPayment'>>({
+    name: '',
+    username: '',
+    address: '',
+    startDate: new Date().toISOString().split('T')[0],
+    totalAmount: 0,
+    balance: 0,
+    isPaid: false,
+    monthlyFees: 0,
+    package: '',
+    phone: ''
+  });
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isMakePaymentModalOpen, setIsMakePaymentModalOpen] = useState(false);
+  const [isPaidPaymentModalOpen, setIsPaidPaymentModalOpen] = useState(false);
+  const [isTotalPaymentModalOpen, setIsTotalPaymentModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [paidPaymentAmount, setPaidPaymentAmount] = useState<number>(0);
+  const [totalPaymentAmount, setTotalPaymentAmount] = useState<number>(0);
+  const [totalBalance, setTotalBalance] = useState<number>(0);
+  const [totalAmount, setTotalAmount] = useState<number>(0);
+  const [paymentType, setPaymentType] = useState<'make' | 'paid'>('make'); // 'make' for regular payment, 'paid' for paid payment
+  const [paymentMethod, setPaymentMethod] = useState<string>('cash');
+  const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
+  const [authUser, setAuthUser] = useState<any>(null); // Store authenticated user info
+  const [loggedInUser, setLoggedInUser] = useState<string>('System User'); // Store logged in user's name
+  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]); // Date range for filtering
 
-  // Function to search in Firebase
-  const handleSearch = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-
-    if (!searchTerm.trim()) {
-      setSearchResults([]);
-      setNoResults(false);
-      return;
-    }
-
-    setIsLoading(true);
-    setNoResults(false);
-
-    try {
-      if (activeTab === 'uploadEntry') {
-        // Query the uploadEntry collection
-        let q;
-
-        if (searchField === 'all') {
-          // Search across username, userid, and address fields
-          q = query(
-            collection(db, 'uploadEntry'),
-            orderBy('uploadedAt', 'desc')
-          );
-        } else {
-          q = query(
-            collection(db, 'uploadEntry'),
-            where(searchField, '>=', searchTerm.trim()),
-            where(searchField, '<=', searchTerm.trim() + '\uf8ff'),
-            orderBy('uploadedAt', 'desc')
-          );
-        }
-
-        const querySnapshot = await getDocs(q);
-        const results: UploadEntry[] = [];
-
-        querySnapshot.forEach((doc) => {
-          results.push({ id: doc.id, ...doc.data() });
+  // Get the authenticated user on component mount
+  useEffect(() => {
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // User is signed in, get their details
+        setAuthUser({
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName || user.email || 'Unknown User'
         });
+      } else {
+        // User is signed out
+        setAuthUser(null);
+      }
+    });
 
-        // If searching all fields, filter client-side
-        if (searchField === 'all') {
-          const filteredResults = results.filter(item => {
-            const username = item.Username || item.username || item.name || item.Name || item.UserName || '';
-            const userid = item['Invoice ID'] || item.userid || item.id || item.ID || item.UserId || '';
-            const address = item.Pacakge || item.Package || item.package || item.address || item.Address || item.location || item.Location || '';
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, []);
 
-            return (
-              String(username).toLowerCase().includes(searchTerm.toLowerCase()) ||
-              String(userid).toLowerCase().includes(searchTerm.toLowerCase()) ||
-              String(address).toLowerCase().includes(searchTerm.toLowerCase())
-            );
-          });
+  // Use the authenticated user's name from the Firebase Users collection
+  useEffect(() => {
+    const fetchLoggedInUserName = async () => {
+      if (authUser?.uid) {
+        try {
+          // Fetch the user's actual name from the Users collection in Firebase
+          const userDocRef = doc(db, 'Users', authUser.uid);
+          const userDocSnap = await getDoc(userDocRef);
 
-          setSearchResults(filteredResults);
-        } else {
-          // For specific field search, filter based on the selected field
-          const filteredResults = results.filter(item => {
-            let fieldValue = '';
-
-            switch (searchField) {
-              case 'username':
-                fieldValue = item.Username || item.username || item.name || item.Name || item.UserName || '';
-                break;
-              case 'userid':
-                fieldValue = item['Invoice ID'] || item.userid || item.id || item.ID || item.UserId || '';
-                break;
-              case 'address':
-                fieldValue = item.Pacakge || item.Package || item.package || item.address || item.Address || item.location || item.Location || '';
-                break;
-              default:
-                fieldValue = '';
-            }
-
-            return String(fieldValue).toLowerCase().includes(searchTerm.toLowerCase());
-          });
-
-          setSearchResults(filteredResults);
-        }
-
-        if (results.length === 0) {
-          setNoResults(true);
-        }
-      } else if (activeTab === 'monthlyData') {
-        // Query the monthlydata collection
-        let q;
-
-        if (searchField === 'all') {
-          // Search across name, id_user, and other relevant fields
-          q = query(
-            collection(db, 'monthlydata'),
-            orderBy('createdAt', 'desc')
-          );
-        } else {
-          // Map searchField to appropriate monthlyData fields
-          let monthlyDataField = '';
-          switch (searchField) {
-            case 'username':
-              monthlyDataField = 'name';
-              break;
-            case 'userid':
-              monthlyDataField = 'id_user';
-              break;
-            case 'address':
-              monthlyDataField = 'monthYear'; // Using monthYear as a relevant field
-              break;
-            default:
-              monthlyDataField = 'name';
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data();
+            const name = userData.name || userData.Name || userData.username || userData.Username || authUser.displayName || authUser.email?.split('@')[0] || 'System User';
+            setLoggedInUser(name);
+          } else {
+            // Fallback to display name, email, or default if Firebase doc doesn't exist
+            setLoggedInUser(authUser.displayName || authUser.email?.split('@')[0] || 'System User');
           }
-
-          q = query(
-            collection(db, 'monthlydata'),
-            where(monthlyDataField, '>=', searchTerm.trim()),
-            where(monthlyDataField, '<=', searchTerm.trim() + '\uf8ff'),
-            orderBy('createdAt', 'desc')
-          );
-        }
-
-        const querySnapshot = await getDocs(q);
-        const results: MonthlyData[] = [];
-
-        querySnapshot.forEach((doc) => {
-          results.push({ id: doc.id, ...doc.data() });
-        });
-
-        // If searching all fields, filter client-side
-        if (searchField === 'all') {
-          const filteredResults = results.filter(item => {
-            const name = item.name || '';
-            const idUser = item.id_user || '';
-            const monthYear = item.monthYear || '';
-
-            return (
-              String(name).toLowerCase().includes(searchTerm.toLowerCase()) ||
-              String(idUser).toLowerCase().includes(searchTerm.toLowerCase()) ||
-              String(monthYear).toLowerCase().includes(searchTerm.toLowerCase())
-            );
-          });
-
-          setSearchResults(filteredResults);
-        } else {
-          // For specific field search, filter based on the selected field
-          const filteredResults = results.filter(item => {
-            let fieldValue = '';
-
-            switch (searchField) {
-              case 'username':
-                fieldValue = item.name || '';
-                break;
-              case 'userid':
-                fieldValue = item.id_user || '';
-                break;
-              case 'address':
-                fieldValue = item.monthYear || ''; // Using monthYear as a relevant field
-                break;
-              default:
-                fieldValue = '';
-            }
-
-            return String(fieldValue).toLowerCase().includes(searchTerm.toLowerCase());
-          });
-
-          setSearchResults(filteredResults);
-        }
-
-        if (results.length === 0) {
-          setNoResults(true);
+        } catch (error) {
+          console.error("Error fetching logged in user data:", error);
+          setLoggedInUser(authUser.displayName || authUser.email?.split('@')[0] || 'System User');
         }
       }
+    };
+
+    fetchLoggedInUserName();
+  }, [authUser?.uid, authUser?.displayName, authUser?.email]);
+
+  // Function to fetch users from Firebase
+  const fetchUsers = async () => {
+    setIsLoading(true);
+    try {
+      // Query the uploadEntry collection for user data
+      const q = query(collection(db, 'uploadEntry'), orderBy('uploadedAt', 'desc'));
+      const querySnapshot = await getDocs(q);
+      const usersData: User[] = [];
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+
+        // Calculate totalAmount and balance based on your data structure
+        const rawBalance = data.Balance || data.balance || data.currentBalance || data.CurrentBalance || data.remaining || data.Remaining ||
+                          data.current_balance || data.Current_Balance || data.remaining_amount || data.Remaining_Amount ||
+                          data.currentAmount || data.CurrentAmount || data.current_amount || data.Current_Amount || 0;
+        const balance = typeof rawBalance === 'number' ? rawBalance :
+                       typeof rawBalance === 'string' ? parseFloat(rawBalance) || 0 :
+                       typeof rawBalance === 'object' && rawBalance && 'seconds' in rawBalance ? 0 : // Handle Firestore timestamps
+                       Number(rawBalance) || 0;
+
+        const rawMonthlyFees = data.monthlyFees || data.MonthlyFees || data.monthly_fee || data.Monthly_Fee ||
+                              data.monthly_fees || data.Monthly_Fees || data.monthlyFee || data.MonthlyFee || 0;
+        const monthlyFees = typeof rawMonthlyFees === 'number' ? rawMonthlyFees :
+                           typeof rawMonthlyFees === 'string' ? parseFloat(rawMonthlyFees) || 0 :
+                           Number(rawMonthlyFees) || 0;
+
+        // Look for potential amount fields that could represent the total payment
+        const potentialAmountFields = [
+          data.Total, data.total, data.Amount, data.amount, data['Total Amount'], data.totalAmount, data.TotalAmount,
+          data.total_amount, data.Total_Amount, data.payment, data.Payment, data.paymentAmount, data.PaymentAmount,
+          data.payment_amount, data.Payment_Amount, data.fee, data.Fee, data.fees, data.Fees
+        ];
+
+        // Find the first valid amount value
+        let totalAmount = 0;
+        for (const field of potentialAmountFields) {
+          if (field !== undefined && field !== null) {
+            const parsed = typeof field === 'number' ? field :
+                          typeof field === 'string' ? parseFloat(field) || 0 :
+                          Number(field) || 0;
+            if (parsed !== 0) {
+              totalAmount = parsed;
+              break;
+            }
+          }
+        }
+
+        // If no specific amount was found, use monthlyFees as fallback
+        if (totalAmount === 0) {
+          totalAmount = monthlyFees;
+        }
+
+        const totalPayment = isNaN(balance) ? 0 : balance; // Total payment is the remaining balance to be paid
+
+        // Determine if the user is fully paid based on the original data from Firebase
+        const calculatedIsPaid = data.isPaid !== undefined ? data.isPaid : data.IsPaid !== undefined ? data.IsPaid : (balance <= 0);
+
+        usersData.push({
+          id: doc.id,
+          name: data.name || data.Name || data.username || data.Username || 'N/A',
+          username: data.Username || data.username || data.name || 'N/A', // CSV username as user ID
+          address: data.address || data.Address || data.location || data.Location || '',
+          startDate: data.StartDate || data.startDate || data.Date || 'N/A',
+          totalAmount: totalAmount,
+          balance: balance,
+          isPaid: calculatedIsPaid, // User is paid when balance is cleared
+          monthlyFees: monthlyFees,
+          totalPayment: totalPayment, // Total payment (remaining balance)
+          package: data.package || data.Package || '',
+          phone: data.phone || data.Phone || data.mobile || '',
+          recordType: 'user',
+          ...data
+        });
+      });
+
+      // Also fetch payment records to show in the table
+      const paymentsQuery = query(collection(db, 'payments'), orderBy('date', 'desc'));
+      const paymentsSnapshot = await getDocs(paymentsQuery);
+
+      paymentsSnapshot.forEach((paymentDoc) => {
+        const data = paymentDoc.data();
+
+        // Get the username from the user document in uploadEntry collection
+        let username = 'N/A';
+        if (data.userId) {
+          const userDocRef = doc(db, 'uploadEntry', data.userId);
+          getDoc(userDocRef).then(userDocSnap => {
+            if (userDocSnap.exists()) {
+              const userData = userDocSnap.data();
+              username = userData.username || userData.Username || userData.name || userData.Name || data.userId;
+            }
+          }).catch(err => {
+            console.error('Error fetching user data:', err);
+            username = data.userId;
+          });
+        }
+
+        usersData.push({
+          id: paymentDoc.id,
+          name: data.userName || 'N/A',
+          username: username,
+          address: 'Payment Record',
+          startDate: data.date || 'N/A',
+          totalAmount: data.amount || 0,
+          balance: data.balance || 0,
+          isPaid: data.isPaid || false,
+          monthlyFees: 0,
+          package: 'Payment',
+          phone: 'N/A',
+          totalPayment: data.amount || 0,
+          recordType: 'payment',
+          ...data
+        });
+      });
+
+      setUsers(usersData);
     } catch (error) {
-      console.error('Error searching documents: ', error);
-      setSearchResults([]);
-      setNoResults(true);
+      console.error('Error fetching users:', error);
+      setUsers([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Clear search
-  const clearSearch = () => {
-    setSearchTerm('');
-    setSearchResults([]);
-    setNoResults(false);
-  };
-
-  // Handle Enter key press
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSearch();
-    }
-  };
-
-  // Load all data initially and run search when search field changes
+  // Load users on component mount
   useEffect(() => {
-    const loadAllData = async () => {
-      setIsLoading(true);
-      try {
-        let results: (UploadEntry | MonthlyData)[] = [];
+    fetchUsers();
+  }, []);
 
-        if (activeTab === 'uploadEntry') {
-          const q = query(collection(db, 'uploadEntry'), orderBy('uploadedAt', 'desc'));
-          const querySnapshot = await getDocs(q);
+  // Filter users based on search term and date range
+  const filteredUsers = users.filter(user => {
+    // Search filter
+    const matchesSearch =
+      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.package.toLowerCase().includes(searchTerm.toLowerCase());
 
-          querySnapshot.forEach((doc) => {
-            results.push({ id: doc.id, ...doc.data() });
-          });
-        } else if (activeTab === 'monthlyData') {
-          const q = query(collection(db, 'monthlydata'), orderBy('createdAt', 'desc'));
-          const querySnapshot = await getDocs(q);
-
-          querySnapshot.forEach((doc) => {
-            results.push({ id: doc.id, ...doc.data() });
-          });
+    // Date range filter
+    let matchesDateRange = true;
+    if (dateRange[0] || dateRange[1]) {
+      // Convert user start date to Date object for comparison
+      let userDateObj: Date;
+      if (typeof user.startDate === 'string') {
+        // If user.startDate is in YYYY-MM-DD format
+        if (/^\d{4}-\d{2}-\d{2}$/.test(user.startDate)) {
+          userDateObj = new Date(user.startDate);
+        } else {
+          // If user.startDate is in ISO format
+          userDateObj = new Date(user.startDate);
         }
-
-        setSearchResults(results);
-      } catch (error) {
-        console.error('Error loading all data: ', error);
-        setSearchResults([]);
-      } finally {
-        setIsLoading(false);
+      } else {
+        // Fallback to current date if format is unknown
+        userDateObj = new Date(String(user.startDate));
       }
-    };
 
-    loadAllData();
-  }, [activeTab]);
+      // Adjust for timezone by setting to start/end of day
+      const adjustedUserDate = new Date(userDateObj.setHours(0, 0, 0, 0));
 
-  // Run search when search field or term changes
-  useEffect(() => {
-    if (searchTerm.trim()) {
-      handleSearch();
-    } else {
-      // Reload all data when search term is cleared
-      const loadAllData = async () => {
-        setIsLoading(true);
-        try {
-          let results: (UploadEntry | MonthlyData)[] = [];
-
-          if (activeTab === 'uploadEntry') {
-            const q = query(collection(db, 'uploadEntry'), orderBy('uploadedAt', 'desc'));
-            const querySnapshot = await getDocs(q);
-
-            querySnapshot.forEach((doc) => {
-              results.push({ id: doc.id, ...doc.data() });
-            });
-          } else if (activeTab === 'monthlyData') {
-            const q = query(collection(db, 'monthlydata'), orderBy('createdAt', 'desc'));
-            const querySnapshot = await getDocs(q);
-
-            querySnapshot.forEach((doc) => {
-              results.push({ id: doc.id, ...doc.data() });
-            });
-          }
-
-          setSearchResults(results);
-        } catch (error) {
-          console.error('Error loading all data: ', error);
-          setSearchResults([]);
-        } finally {
-          setIsLoading(false);
-        }
-      };
-
-      loadAllData();
+      if (dateRange[0] && dateRange[1]) {
+        const startOfDay = new Date(dateRange[0]!);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(dateRange[1]!);
+        endOfDay.setHours(23, 59, 59, 999);
+        matchesDateRange = adjustedUserDate >= startOfDay && adjustedUserDate <= endOfDay;
+      } else if (dateRange[0]) {
+        const startOfDay = new Date(dateRange[0]!);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(dateRange[0]!);
+        endOfDay.setHours(23, 59, 59, 999);
+        matchesDateRange = adjustedUserDate >= startOfDay && adjustedUserDate <= endOfDay;
+      } else if (dateRange[1]) {
+        const startOfDay = new Date(dateRange[1]!);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(dateRange[1]!);
+        endOfDay.setHours(23, 59, 59, 999);
+        matchesDateRange = adjustedUserDate >= startOfDay && adjustedUserDate <= endOfDay;
+      }
     }
-  }, [searchField, searchTerm, activeTab]);
 
-  // Address badge component
-  const AddressBadge = ({ address }: { address: string }) => {
-    const colors: Record<string, string> = {
-      pakistan: 'blue',
-      Pakistan: 'blue',
-      'United States': 'green',
-      'United Kingdom': 'orange',
-      India: 'yellow',
-      China: 'red',
-      Japan: 'purple'
-    };
-
-    return (
-      <Badge
-        variant="light"
-        color={colors[address] || 'gray'}
-        radius="sm"
-        className="font-bold py-3"
-      >
-        {address}
-      </Badge>
-    );
-  };
+    return matchesSearch && matchesDateRange;
+  });
 
   // Handle edit button click
-  const handleEditClick = (item: UploadEntry) => {
-    setEditingItem(item);
-    // Initialize form with item data and set default values
-    const defaultValues = {
-      name: item.name || item.Name || item.username || item.Username || item.UserName || 'N/A',
-      Phone: item.Phone || item.phone || item.Mobile || item.mobile || 'N/A',
-      'Monthly Fee': item['Monthly Fee'] || item.MonthlyFee || item.monthlyFee || '0',
-      Balance: item.Balance || item.balance || '0',
-      Profit: item.Profit || item.profit || '0',
-      Total: item.Total || item.total || '0',
-      Price: item.Price || item.price || '0',
-      ...item
-    };
-    setEditForm(defaultValues);
+  const handleEditClick = (user: User) => {
+    setEditingUser(user);
+    // Initialize form with user data
+    setEditForm({
+      ...user
+    });
   };
 
   // Handle form input changes
-  const handleInputChange = (field: string, value: any) => {
-    // Ensure all values are treated as strings
-    const stringValue = value === null || value === undefined ? '' : String(value);
-    setEditForm(prev => ({
-      ...prev,
-      [field]: stringValue
-    }));
+  const handleInputChange = (field: keyof User, value: any) => {
+    setEditForm(prev => {
+      // Create a new object to ensure state updates properly
+      const newForm = { ...prev };
+      newForm[field] = value;
+      return newForm;
+    });
   };
 
   // Handle save changes
   const handleSaveChanges = async () => {
-    if (!editingItem) return;
+    if (!editingUser) return;
 
     try {
-      // Ensure all values in editForm are strings before saving
-      const stringifiedEditForm = Object.fromEntries(
-        Object.entries(editForm).map(([key, value]) => [key, String(value)])
-      );
+      const docRef = doc(db, 'uploadEntry', editingUser.id);
 
-      // Use the sync service to update both collections
-      await updateUserDataInBothCollections(editingItem.id, stringifiedEditForm);
+      // Prepare update object - only allow updating editable fields
+      const updateData: Partial<User> = {
+        name: editForm.name,
+        address: editForm.address,
+        monthlyFees: editForm.monthlyFees,
+        package: editForm.package,
+        phone: editForm.phone,
+      };
+
+      await updateDoc(docRef, updateData);
 
       // Update local state
-      setSearchResults(prev => prev.map(u =>
-        u.id === editingItem.id ? {...u, ...stringifiedEditForm} : u
+      setUsers(prev => prev.map(u =>
+        u.id === editingUser.id ? { ...editingUser, ...updateData } : u
       ));
 
-      setEditingItem(null);
+      setEditingUser(null);
     } catch (error) {
       console.error("Error updating document: ", error);
     }
@@ -388,581 +344,1347 @@ export default function SearchPage() {
 
   // Close edit modal
   const closeEditModal = () => {
-    setEditingItem(null);
+    setEditingUser(null);
     setEditForm({});
+  };
+
+  // Handle new user form input changes
+  const handleNewUserInputChange = (field: keyof Omit<User, 'id' | 'totalPayment'>, value: any) => {
+    setNewUserForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Handle save new user
+  const handleSaveNewUser = async () => {
+    try {
+      // Add the new user to the uploadEntry collection
+      const docRef = await addDoc(collection(db, 'uploadEntry'), {
+        ...newUserForm,
+        uploadedAt: new Date()
+      });
+
+      // Add the new user to the local state
+      const newUser: User = {
+        id: docRef.id,
+        name: String(newUserForm.name || ''),
+        username: String(newUserForm.username || ''),
+        address: String(newUserForm.address || ''),
+        startDate: String(newUserForm.startDate || ''),
+        totalAmount: Number(newUserForm.totalAmount || 0),
+        balance: Number(newUserForm.balance || 0),
+        isPaid: Boolean(newUserForm.isPaid || false),
+        monthlyFees: Number(newUserForm.monthlyFees || 0),
+        package: String(newUserForm.package || ''),
+        phone: String(newUserForm.phone || ''),
+        totalPayment: Number(newUserForm.balance || 0), // Total payment is the remaining balance to be paid
+        recordType: 'user',
+        ...newUserForm
+      };
+
+      setUsers(prev => [...prev, newUser]);
+
+      // Reset the form and close the modal
+      setNewUserForm({
+        name: '',
+        username: '',
+        address: '',
+        startDate: new Date().toISOString().split('T')[0],
+        totalAmount: 0,
+        balance: 0,
+        isPaid: false,
+        monthlyFees: 0,
+        package: '',
+        phone: ''
+      });
+      setIsNewUserModalOpen(false);
+    } catch (error) {
+      console.error("Error adding new user: ", error);
+    }
+  };
+
+  // Close new user modal
+  const closeNewUserModal = () => {
+    setIsNewUserModalOpen(false);
+    setNewUserForm({
+      name: '',
+      username: '',
+      address: '',
+      startDate: new Date().toISOString().split('T')[0],
+      totalAmount: 0,
+      balance: 0,
+      isPaid: false,
+      monthlyFees: 0,
+      package: '',
+      phone: ''
+    });
+  };
+
+  // Handle paid payment
+  const handlePaidPayment = async () => {
+    if (!selectedUser) {
+      notifications.show({
+        title: 'Error',
+        message: "No user selected for payment",
+        color: 'red',
+        position: 'top-right'
+      });
+      return;
+    }
+
+    if (paidPaymentAmount <= 0) {
+      notifications.show({
+        title: 'Error',
+        message: "Payment amount must be greater than 0",
+        color: 'red',
+        position: 'top-right'
+      });
+      return;
+    }
+
+    if (paidPaymentAmount > (selectedUser.balance + (selectedUser.monthlyFees || 0))) {
+      notifications.show({
+        title: 'Error',
+        message: `Payment amount exceeds total payable amount of Rs. ${(selectedUser.balance + (selectedUser.monthlyFees || 0)).toFixed(2)}`,
+        color: 'red',
+        position: 'top-right'
+      });
+      return;
+    }
+
+    setIsProcessingPayment(true);
+
+    try {
+      // Update the user's balance in the uploadEntry collection
+      const userDocRef = doc(db, 'uploadEntry', selectedUser.id);
+      
+      let newBalance = selectedUser.balance;
+      let newMonthlyFees = selectedUser.monthlyFees || 0;
+      let isPaid = false;
+
+      // Paid payment reduces balance first, then monthly fees if balance is cleared
+      if (paidPaymentAmount <= selectedUser.balance) {
+        // Payment only affects balance
+        newBalance = selectedUser.balance - paidPaymentAmount;
+        newMonthlyFees = selectedUser.monthlyFees || 0;
+      } else {
+        // Payment exceeds balance, so apply remainder to monthly fees
+        const excessPayment = paidPaymentAmount - selectedUser.balance;
+        newBalance = 0;
+        newMonthlyFees = Math.max(0, (selectedUser.monthlyFees || 0) - excessPayment);
+      }
+      isPaid = newBalance <= 0 && newMonthlyFees <= 0;
+
+      await updateDoc(userDocRef, {
+        balance: newBalance,
+        monthlyFees: newMonthlyFees,
+        isPaid: isPaid
+      });
+
+      // Create a payment record in a separate collection
+      await addDoc(collection(db, 'payments'), {
+        amount: paidPaymentAmount,
+        date: new Date().toISOString(),
+        isPaid: true,
+        newBalance: newBalance,
+        newMonthlyFees: newMonthlyFees,
+        previousBalance: selectedUser.balance,
+        previousMonthlyFees: selectedUser.monthlyFees || 0,
+        method: paymentMethod,
+        userId: selectedUser.id,
+        userName: selectedUser.name,
+        paidByName: loggedInUser, // Use the logged-in user's name
+        paidByDateTime: new Date().toISOString() // Current date and time
+      });
+
+      // Update local state
+      setUsers(prev => prev.map(u =>
+        u.id === selectedUser.id
+          ? { ...u, balance: newBalance, monthlyFees: newMonthlyFees, isPaid: isPaid }
+          : u
+      ));
+
+      // Close the modal and reset state
+      setIsPaidPaymentModalOpen(false);
+      setPaidPaymentAmount(0);
+      setSelectedUser(null);
+
+      notifications.show({
+        title: 'Paid Payment Successful',
+        message: `Successfully processed paid payment of Rs. ${paidPaymentAmount.toFixed(2)} for ${selectedUser.name}. New balance: Rs. ${newBalance.toFixed(2)}, New monthly fees: Rs. ${newMonthlyFees.toFixed(2)}`,
+        color: 'green',
+        position: 'top-right'
+      });
+
+      // Refresh the user data to ensure the table updates correctly
+      await fetchUsers();
+    } catch (error) {
+      console.error("Error processing paid payment: ", error);
+      notifications.show({
+        title: 'Paid Payment Failed',
+        message: "Error processing paid payment: " + (error instanceof Error ? error.message : "Unknown error"),
+        color: 'red',
+        position: 'top-right'
+      });
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
+  // Handle calculate payment
+  const handleTotalPayment = async () => {
+    if (!selectedUser) {
+      notifications.show({
+        title: 'Error',
+        message: "No user selected for payment",
+        color: 'red',
+        position: 'top-right'
+      });
+      return;
+    }
+
+    if (totalPaymentAmount <= 0) {
+      notifications.show({
+        title: 'Error',
+        message: "Payment amount must be greater than 0",
+        color: 'red',
+        position: 'top-right'
+      });
+      return;
+    }
+
+    if (totalPaymentAmount > selectedUser.balance) {
+      notifications.show({
+        title: 'Error',
+        message: `Payment amount exceeds current balance of Rs. ${selectedUser.balance.toFixed(2)}`,
+        color: 'red',
+        position: 'top-right'
+      });
+      return;
+    }
+
+    setIsProcessingPayment(true);
+
+    try {
+      // Update the user's data in the uploadEntry collection
+      const userDocRef = doc(db, 'uploadEntry', selectedUser.id);
+      
+      // Calculate new values based on the entered amounts
+      const newBalance = selectedUser.balance - totalPaymentAmount;
+      const isPaid = newBalance <= 0;
+
+      await updateDoc(userDocRef, {
+        balance: newBalance,
+        isPaid: isPaid
+      });
+
+      // Create a payment record in a separate collection
+      await addDoc(collection(db, 'payments'), {
+        amount: totalPaymentAmount,
+        date: new Date().toISOString(),
+        isPaid: true,
+        newBalance: newBalance,
+        previousBalance: selectedUser.balance,
+        method: paymentMethod,
+        userId: selectedUser.id,
+        userName: selectedUser.name,
+        paidByName: loggedInUser, // Use the logged-in user's name
+        paidByDateTime: new Date().toISOString() // Current date and time
+      });
+
+      // Update local state
+      setUsers(prev => prev.map(u =>
+        u.id === selectedUser.id
+          ? { ...u, balance: newBalance, isPaid: isPaid }
+          : u
+      ));
+
+      // Close the modal and reset state
+      setIsTotalPaymentModalOpen(false);
+      setTotalPaymentAmount(0);
+      setTotalBalance(0);
+      setTotalAmount(0);
+      setSelectedUser(null);
+
+      notifications.show({
+        title: 'Calculate Payment Successful',
+        message: `Successfully processed payment of Rs. ${totalPaymentAmount.toFixed(2)} for ${selectedUser.name}. New balance: Rs. ${newBalance.toFixed(2)}`,
+        color: 'green',
+        position: 'top-right'
+      });
+
+      // Refresh the user data to ensure the table updates correctly
+      await fetchUsers();
+    } catch (error) {
+      console.error("Error processing calculate payment: ", error);
+      notifications.show({
+        title: 'Calculate Payment Failed',
+        message: "Error processing calculate payment: " + (error instanceof Error ? error.message : "Unknown error"),
+        color: 'red',
+        position: 'top-right'
+      });
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
+  // Handle make payment 2
+  const handleMakePayment2 = async () => {
+    if (!selectedUser) {
+      notifications.show({
+        title: 'Error',
+        message: "No user selected for payment",
+        color: 'red',
+        position: 'top-right'
+      });
+      return;
+    }
+
+    if (paymentAmount <= 0) {
+      notifications.show({
+        title: 'Error',
+        message: "Payment amount must be greater than 0",
+        color: 'red',
+        position: 'top-right'
+      });
+      return;
+    }
+
+    if (paymentAmount > selectedUser.balance) {
+      notifications.show({
+        title: 'Error',
+        message: `Payment amount exceeds current balance of Rs. ${selectedUser.balance.toFixed(2)}`,
+        color: 'red',
+        position: 'top-right'
+      });
+      return;
+    }
+
+    setIsProcessingPayment(true);
+
+    try {
+      // Update the user's balance in the uploadEntry collection
+      const userDocRef = doc(db, 'uploadEntry', selectedUser.id);
+      const newBalance = selectedUser.balance - paymentAmount;
+      const isPaid = newBalance <= 0;
+
+      await updateDoc(userDocRef, {
+        balance: newBalance,
+        isPaid: isPaid
+      });
+
+      // Create a payment record in a separate collection
+      await addDoc(collection(db, 'payments'), {
+        amount: paymentAmount,
+        date: new Date().toISOString(),
+        isPaid: true,
+        newBalance: newBalance,
+        previousBalance: selectedUser.balance,
+        method: paymentMethod,
+        userId: selectedUser.id,
+        userName: selectedUser.name,
+        paidByName: loggedInUser, // Use the logged-in user's name
+        paidByDateTime: new Date().toISOString() // Current date and time
+      });
+
+      // Update local state
+      setUsers(prev => prev.map(u =>
+        u.id === selectedUser.id
+          ? { ...u, balance: newBalance, isPaid: isPaid }
+          : u
+      ));
+
+      // Close the modal and reset state
+      setIsMakePaymentModalOpen(false);
+      setPaymentAmount(0);
+      setSelectedUser(null);
+
+      notifications.show({
+        title: 'Make Payment 2 Successful',
+        message: `Successfully processed payment of Rs. ${paymentAmount.toFixed(2)} for ${selectedUser.name}. New balance: Rs. ${newBalance.toFixed(2)}`,
+        color: 'green',
+        position: 'top-right'
+      });
+
+      // Refresh the user data to ensure the table updates correctly
+      await fetchUsers();
+    } catch (error) {
+      console.error("Error processing make payment 2: ", error);
+      notifications.show({
+        title: 'Make Payment 2 Failed',
+        message: "Error processing make payment 2: " + (error instanceof Error ? error.message : "Unknown error"),
+        color: 'red',
+        position: 'top-right'
+      });
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
+  // Handle payment
+  const handleMakePayment = async () => {
+    if (!selectedUser) {
+      notifications.show({
+        title: 'Error',
+        message: "No user selected for payment",
+        color: 'red',
+        position: 'top-right'
+      });
+      return;
+    }
+
+    if (paymentAmount <= 0) {
+      notifications.show({
+        title: 'Error',
+        message: "Payment amount must be greater than 0",
+        color: 'red',
+        position: 'top-right'
+      });
+      return;
+    }
+
+    // For "Paid Payment", allow payment up to the total amount (balance + monthlyFees)
+    if (paymentType === 'make' && paymentAmount > selectedUser.balance) {
+      notifications.show({
+        title: 'Error',
+        message: `Payment amount exceeds current balance of Rs. ${selectedUser.balance.toFixed(2)}`,
+        color: 'red',
+        position: 'top-right'
+      });
+      return;
+    }
+
+    setIsProcessingPayment(true);
+
+    try {
+      // Update the user's balance in the uploadEntry collection
+      const userDocRef = doc(db, 'uploadEntry', selectedUser.id);
+      
+      let newBalance = selectedUser.balance;
+      let newMonthlyFees = selectedUser.monthlyFees || 0;
+      let isPaid = false;
+
+      if (paymentType === 'make') {
+        // Regular payment reduces balance only
+        newBalance = selectedUser.balance - paymentAmount;
+        isPaid = newBalance <= 0 && newMonthlyFees <= 0;
+      } else if (paymentType === 'paid') {
+        // Paid payment reduces balance first, then monthly fees if balance is cleared
+        if (paymentAmount <= selectedUser.balance) {
+          // Payment only affects balance
+          newBalance = selectedUser.balance - paymentAmount;
+          newMonthlyFees = selectedUser.monthlyFees || 0;
+        } else {
+          // Payment exceeds balance, so apply remainder to monthly fees
+          const excessPayment = paymentAmount - selectedUser.balance;
+          newBalance = 0;
+          newMonthlyFees = Math.max(0, (selectedUser.monthlyFees || 0) - excessPayment);
+        }
+        isPaid = newBalance <= 0 && newMonthlyFees <= 0;
+      }
+
+      await updateDoc(userDocRef, {
+        balance: newBalance,
+        monthlyFees: newMonthlyFees,
+        isPaid: isPaid
+      });
+
+      // Create a payment record in a separate collection
+      await addDoc(collection(db, 'payments'), {
+        amount: paymentAmount,
+        date: new Date().toISOString(),
+        isPaid: true,
+        newBalance: newBalance,
+        newMonthlyFees: newMonthlyFees,
+        previousBalance: selectedUser.balance,
+        previousMonthlyFees: selectedUser.monthlyFees || 0,
+        method: paymentMethod,
+        userId: selectedUser.id,
+        userName: selectedUser.name,
+        paidByName: loggedInUser, // Use the logged-in user's name
+        paidByDateTime: new Date().toISOString() // Current date and time
+      });
+
+      // Update local state
+      setUsers(prev => prev.map(u =>
+        u.id === selectedUser.id
+          ? { ...u, balance: newBalance, monthlyFees: newMonthlyFees, isPaid: isPaid }
+          : u
+      ));
+
+      // Close the modal and reset state
+      setIsPaymentModalOpen(false);
+      setPaymentAmount(0);
+      setSelectedUser(null);
+
+      notifications.show({
+        title: 'Payment Successful',
+        message: `Successfully processed ${paymentType === 'make' ? 'payment' : 'paid payment'} of Rs. ${paymentAmount.toFixed(2)} for ${selectedUser.name}. New balance: Rs. ${newBalance.toFixed(2)}, New monthly fees: Rs. ${newMonthlyFees.toFixed(2)}`,
+        color: 'green',
+        position: 'top-right'
+      });
+
+      // Refresh the user data to ensure the table updates correctly
+      await fetchUsers();
+    } catch (error) {
+      console.error("Error processing payment: ", error);
+      notifications.show({
+        title: 'Payment Failed',
+        message: "Error processing payment: " + (error instanceof Error ? error.message : "Unknown error"),
+        color: 'red',
+        position: 'top-right'
+      });
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
+  // Close payment modal
+  const closePaymentModal = () => {
+    setIsPaymentModalOpen(false);
+    setPaymentAmount(0);
+    setSelectedUser(null);
   };
 
   return (
     <div className="space-y-6">
-      {/* Search and Create Section */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-        <div className="flex flex-col lg:flex-row justify-between items-center gap-4 w-full">
-          <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto lg:flex-1">
-            <div className="flex flex-col sm:flex-row gap-2 w-full">
-              <Select
-                value={searchField}
-                onChange={(value) => setSearchField(value as any)}
-                data={[
-                  { value: 'all', label: 'All Fields' },
-                  { value: 'username', label: 'Username' },
-                  { value: 'userid', label: 'User ID' },
-                  { value: 'address', label: 'Address' },
-                ]}
-                className="w-full sm:w-40 mb-2 sm:mb-0"
-                placeholder="Search in"
-                size="md"
+      <Paper radius="lg" withBorder className="p-6 bg-white border-gray-200 shadow-md">
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          <div className="flex-grow">
+            <TextInput
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by name, username, address, or package..."
+              size="md"
+              leftSection={<IconSearch size={16} />}
+              rightSection={
+                searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm('')}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <IconX size={16} />
+                  </button>
+                )
+              }
+              className="w-full pr-10"
+            />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
+            <div>
+              <Text size="sm" className="mb-1 text-gray-600 font-medium">Start Date</Text>
+              <input
+                type="date"
+                value={dateRange[0] ? new Date(dateRange[0]).toISOString().split('T')[0] : ''}
+                onChange={(e) => {
+                  const newStart = e.currentTarget.value ? new Date(e.currentTarget.value) : null;
+                  setDateRange([newStart, dateRange[1]]);
+                }}
+                className="w-full h-10 px-3 py-2 text-sm text-gray-700 placeholder-gray-400 border border-gray-300 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
-
-              <div className="relative flex-1">
-                <TextInput
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Search by username, userid, or address..."
-                  className="pr-10"
-                  size="md"
-                  rightSection={
-                    searchTerm && (
-                      <button
-                        type="button"
-                        onClick={clearSearch}
-                        className="text-gray-400 hover:text-gray-600"
-                      >
-                        <IconX size={16} />
-                      </button>
-                    )
-                  }
-                />
-                <IconSearch className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-              </div>
             </div>
-
-            <Button
-              type="submit"
-              className="bg-[#1e40af] hover:bg-[#1e40af]/90 text-white flex items-center justify-center gap-2 min-w-[120px] h-[46px] rounded-lg shadow-sm transition-all duration-200 mt-2 sm:mt-0"
-            >
-              <IconSearch size={18} />
-              <span>Search</span>
-            </Button>
-          </form>
-
+            <div>
+              <Text size="sm" className="mb-1 text-gray-600 font-medium">End Date</Text>
+              <input
+                type="date"
+                value={dateRange[1] ? new Date(dateRange[1]).toISOString().split('T')[0] : ''}
+                onChange={(e) => {
+                  const newEnd = e.currentTarget.value ? new Date(e.currentTarget.value) : null;
+                  setDateRange([dateRange[0], newEnd]);
+                }}
+                className="w-full h-10 px-3 py-2 text-sm text-gray-700 placeholder-gray-400 border border-gray-300 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+          
           <Button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="bg-[#1e40af] hover:bg-[#1e40af]/90 text-white flex items-center justify-center gap-2 min-w-[120px] h-[46px] rounded-lg shadow-sm transition-all duration-200 mt-2 lg:mt-0"
+            onClick={() => setIsNewUserModalOpen(true)}
+            className="bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white flex items-center justify-center gap-2 h-[44px] rounded-lg shadow-md transition-all duration-200"
+            size="md"
+            leftSection={<IconPlus size={18} />}
           >
-            <IconPlus size={18} />
-            <span>Create User</span>
+            Create User
           </Button>
         </div>
-      </div>
+      </Paper>
 
-      {/* Tab Navigation */}
-      <Tabs value={activeTab} onChange={setActiveTab} variant="outline">
-        <Tabs.List>
-          <Tabs.Tab value="uploadEntry" leftSection={<IconUser size={14} />}>
-            User Entries
-          </Tabs.Tab>
-          <Tabs.Tab value="monthlyData" leftSection={<IconCalendar size={14} />}>
-            Monthly Data
-          </Tabs.Tab>
-        </Tabs.List>
-
-        <Tabs.Panel value="uploadEntry" pt="xs">
-          {/* Search Results */}
-          {isLoading && (
-            <Card withBorder radius="md" className="relative">
-              <LoadingOverlay visible={true} blur={2} />
-              <Text className="text-center py-4">Loading...</Text>
-            </Card>
-          )}
-
-          {/* Transaction History Table */}
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <Text className="text-lg font-bold text-gray-800">All Users Entry</Text>
-              <Text className="text-sm text-gray-500">
-                Showing {searchResults.length} record{searchResults.length !== 1 ? 's' : ''}
+      {/* Users Table */}
+      <div>
+        <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
+          <div className="w-full flex-1 min-w-0">
+            <div className="w-full flex flex-col md:flex-row md:items-center gap-2">
+              <Text className="text-xl font-bold text-gray-800 break-words">
+                User Search Results
               </Text>
+              <Badge color="blue" variant="light" className="text-xs px-3 py-1 flex-shrink-0 mt-1 md:mt-0">
+                {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'}
+              </Badge>
             </div>
+          </div>
+          <Text className="text-sm text-gray-500 text-left md:text-right mt-1 md:mt-0 w-auto">
+            Showing {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''}
+          </Text>
+        </div>
+
+        {/* Responsive table container */}
+        <div className="overflow-x-auto">
+          {/* Desktop/Tablet view - Table */}
+          <div className="hidden md:block">
             <Paper radius="md" withBorder className="overflow-hidden border-gray-100 shadow-sm">
-              <Table verticalSpacing="md" horizontalSpacing="xl" className="min-w-[800px]">
+              <Table verticalSpacing="sm" horizontalSpacing="lg" className="min-w-full">
                 <Table.Thead className="bg-gray-50/50">
                   <Table.Tr>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">User ID</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">Username</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">Package</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">Amount</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">Status</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">Date</Table.Th>
-                    <Table.Th aria-label="Actions" />
+                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[100px] sm:min-w-[120px]">User ID</Table.Th>
+                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[100px] sm:min-w-[120px]">Name</Table.Th>
+                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[100px] sm:min-w-[120px]">Address</Table.Th>
+                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[80px] sm:min-w-[100px]">Package</Table.Th>
+                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[80px] sm:min-w-[100px]">Start Date</Table.Th>
+                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[80px] sm:min-w-[100px]">Total Payable Amount</Table.Th>
+                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[60px] sm:min-w-[80px]">Status</Table.Th>
+                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[100px] sm:min-w-[120px]">Actions</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {searchResults.map((item) => {
-                    // Use exact field names from your Firebase data
-                    const username = item.Username || item.username || item.name || item.Name || item.UserName || 'N/A';
-                    const invoiceId = item['Invoice ID'] || item.invoiceId || item.invoice_id || 'N/A';
-                    const nameValue = item.name || item.Name || item.username || item.Username || item.UserName || 'N/A';
-                    const packageName = item.Pacakge || item.Package || item.package || 'N/A';
-                    const price = item.Price || item.price || 'N/A';
-                    const profit = item.Profit || item.profit || 'N/A';
-                    const total = item.Total || item.total || 'N/A';
-                    const date = item.Date || item.date || item.Date || 'N/A';
-                    const status = item.isPaid || item.status || 'N/A';
-
-                    const address = item.address || item.Address || item.location || item.Location || 'N/A';
-
-                    return (
-                      <Table.Tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
-                        <Table.Td className="font-semibold text-gray-700">{nameValue}</Table.Td>
-                        <Table.Td>
-                          <Text size="sm" fw={600} className="text-gray-800">{username}</Text>
+                  {isLoading ? (
+                    <Table.Tr>
+                      <Table.Td colSpan={10} className="text-center py-10">
+                        <LoadingOverlay visible={true} overlayProps={{ radius: "sm", blur: 2 }} />
+                        <Text className="text-center py-4">Loading users...</Text>
+                      </Table.Td>
+                    </Table.Tr>
+                  ) : filteredUsers.length > 0 ? (
+                    filteredUsers.map((user) => (
+                      <Table.Tr key={user.id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-100 last:border-b-0">
+                        <Table.Td className="font-semibold text-gray-700 py-2 px-2 sm:px-4 min-w-[100px] sm:min-w-[120px]">
+                          {user.username}
                         </Table.Td>
-                        <Table.Td className="text-gray-400 text-sm">{packageName}</Table.Td>
-                        <Table.Td className="font-bold text-gray-800">{total}</Table.Td>
-                        <Table.Td>
-                          <AddressBadge address={address} />
+                        <Table.Td className="py-2 px-2 sm:px-4 min-w-[100px] sm:min-w-[120px]">
+                          {user.name}
                         </Table.Td>
-                        <Table.Td className="text-gray-400 text-sm">{date}</Table.Td>
-                        <Table.Td>
+                        <Table.Td className="py-2 px-2 sm:px-4 min-w-[100px] sm:min-w-[120px]">
+                          {user.address}
+                        </Table.Td>
+                        <Table.Td className="py-2 px-2 sm:px-4 min-w-[80px] sm:min-w-[100px]">
+                          {user.package || 'N/A'}
+                        </Table.Td>
+                        <Table.Td className="py-2 px-2 sm:px-4 min-w-[80px] sm:min-w-[100px]">
+                          {user.startDate}
+                        </Table.Td>
+                        <Table.Td className="font-bold text-gray-800 py-2 px-2 sm:px-4 min-w-[80px] sm:min-w-[100px]">
+                          Rs. {user.totalAmount.toFixed(2)}
+                        </Table.Td>
+                        <Table.Td className="py-2 px-2 sm:px-4 min-w-[60px] sm:min-w-[80px]">
+                          <Badge
+                            variant="light"
+                            color={user.isPaid ? 'green' : 'orange'}
+                            radius="sm"
+                            className="font-bold py-2 px-3 text-xs"
+                          >
+                            {user.isPaid ? 'PAID' : 'UNPAID'}
+                          </Badge>
+                        </Table.Td>
+                        <Table.Td className="py-2 px-2 sm:px-4 min-w-[100px] sm:min-w-[120px]">
                           <Menu shadow="md" width={200}>
                             <Menu.Target>
-                              <ActionIcon variant="subtle" color="gray"><IconDotsVertical size={16} /></ActionIcon>
+                              <ActionIcon variant="subtle" color="gray" size="lg">
+                                <IconDotsVertical size={16} />
+                              </ActionIcon>
                             </Menu.Target>
 
                             <Menu.Dropdown>
                               <Menu.Item
-                                leftSection={<IconMapPin size={14} />}
+                                leftSection={<IconPencil size={14} />}
+                                onClick={() => handleEditClick(user)}
+                              >
+                                Edit User
+                              </Menu.Item>
+                              <Menu.Item
+                                leftSection={<IconCoin size={14} />}
                                 onClick={() => {
-                                  // Update address in Firebase
-                                  const docRef = doc(db, 'uploadEntry', item.id);
-                                  updateDoc(docRef, { address: 'pakistan' })
-                                    .then(() => {
-                                      // Update local state to reflect the change
-                                      setSearchResults(prev => prev.map(u =>
-                                        u.id === item.id ? {...u, address: 'pakistan'} : u
-                                      ));
-                                    })
-                                    .catch(error => {
-                                      console.error("Error updating document: ", error);
-                                    });
+                                  setSelectedUser(user);
+                                  setIsPaidPaymentModalOpen(true);
                                 }}
                               >
-                                Set Default Address
+                                Paid Payment
                               </Menu.Item>
+                              <Menu.Divider />
+                              <Menu.Label>Danger zone</Menu.Label>
                               <Menu.Item
-                                leftSection={<IconPencil size={14} />}
-                                onClick={() => handleEditClick(item)}
-                              >
-                                Edit
-                              </Menu.Item>
-                              <Menu.Item
-                                leftSection={<IconTrash size={14} />}
                                 color="red"
-                                onClick={() => {
-                                  if (window.confirm(`Are you sure you want to delete user "${username}" (ID: ${nameValue})?`)) {
-                                    // Delete document from Firebase using sync service
-                                    deleteUserDataFromBothCollections(item.id)
-                                      .then(() => {
-                                        // Update local state to reflect the deletion
-                                        setSearchResults(prev => prev.filter(u => u.id !== item.id));
-                                      })
-                                      .catch(error => {
-                                        console.error("Error deleting document: ", error);
+                                leftSection={<IconTrash size={14} />}
+                                onClick={async () => {
+                                  if (window.confirm(`Are you sure you want to delete user ${user.name}?`)) {
+                                    try {
+                                      await deleteDoc(doc(db, 'uploadEntry', user.id));
+                                      setUsers(prev => prev.filter(u => u.id !== user.id));
+                                      notifications.show({
+                                        title: 'Success',
+                                        message: `User ${user.name} deleted successfully`,
+                                        color: 'green',
                                       });
+                                    } catch (error) {
+                                      console.error("Error deleting document: ", error);
+                                      notifications.show({
+                                        title: 'Error',
+                                        message: "Failed to delete user",
+                                        color: 'red',
+                                      });
+                                    }
                                   }
                                 }}
                               >
-                                Delete
+                                Delete User
                               </Menu.Item>
                             </Menu.Dropdown>
                           </Menu>
                         </Table.Td>
                       </Table.Tr>
-                    );
-                  })}
+                    ))
+                  ) : (
+                    <Table.Tr>
+                      <Table.Td colSpan={10} className="text-center py-10 text-gray-500">
+                        {searchTerm ? 'No users found matching your search' : 'No users available'}
+                      </Table.Td>
+                    </Table.Tr>
+                  )}
                 </Table.Tbody>
               </Table>
             </Paper>
           </div>
 
-          {/* Edit Modal */}
-          <Modal
-            opened={!!editingItem}
-            onClose={closeEditModal}
-            title={`Edit User: ${editingItem?.username || editingItem?.name || editingItem?.Name || editingItem?.UserName || editingItem?.id}`}
-            size="lg"
-          >
-            {editingItem && (
-              <div className="space-y-4">
-                {/* Specific fields for uploadEntry data */}
-                <Input
-                  label="User ID:"
-                  placeholder="Enter User ID"
-                  value={editForm['User ID'] || editForm.userid || editForm.id || editForm.ID || editForm.UserId || ''}
-                  onChange={(e) => handleInputChange('User ID', e.currentTarget.value)}
-                />
-
-                <Input
-                  label="Username:"
-                  placeholder="Enter Username"
-                  value={editForm.Username || editForm.username || editForm.name || editForm.Name || editForm.UserName || ''}
-                  onChange={(e) => handleInputChange('Username', e.currentTarget.value)}
-                />
-
-                <Input
-                  label="Name:"
-                  placeholder="Enter Name"
-                  value={editForm.name || editForm.Name || editForm.username || editForm.Username || editForm.UserName || 'N/A'}
-                  onChange={(e) => handleInputChange('name', e.currentTarget.value)}
-                />
-
-                <Input
-                  label="Phone:"
-                  placeholder="Enter Phone Number"
-                  value={editForm.Phone || editForm.phone || editForm.Mobile || editForm.mobile || 'N/A'}
-                  onChange={(e) => handleInputChange('Phone', e.currentTarget.value)}
-                />
-
-                <Input
-                  label="Package:"
-                  placeholder="Enter Package"
-                  value={editForm.Package || editForm.Pacakge || editForm.package || ''}
-                  onChange={(e) => handleInputChange('Package', e.currentTarget.value)}
-                />
-
-                <Input
-                  label="Amount:"
-                  placeholder="Enter Amount"
-                  value={editForm.Amount || editForm.Price || editForm.Total || editForm.total || editForm.payment || editForm.Payment || editForm.fee || editForm.Fee || '0'}
-                  onChange={(e) => handleInputChange('Amount', e.currentTarget.value)}
-                />
-
-                <Input
-                  label="Address:"
-                  placeholder="Enter Address"
-                  value={editForm.Address || editForm.address || editForm.location || editForm.Location || ''}
-                  onChange={(e) => handleInputChange('Address', e.currentTarget.value)}
-                />
-
-                <Input
-                  label="Password:"
-                  placeholder="Enter Password"
-                  value={editForm.Password || editForm.password || ''}
-                  onChange={(e) => handleInputChange('Password', e.currentTarget.value)}
-                />
-
-                <Input
-                  label="Monthly Fee:"
-                  placeholder="Enter Monthly Fee"
-                  value={editForm['Monthly Fee'] || editForm.MonthlyFee || editForm.monthlyFee || '0'}
-                  onChange={(e) => handleInputChange('Monthly Fee', e.currentTarget.value)}
-                />
-
-                <Input
-                  label="Balance:"
-                  placeholder="Enter Balance (default 0)"
-                  value={editForm.Balance || editForm.balance || '0'}
-                  onChange={(e) => handleInputChange('Balance', e.currentTarget.value)}
-                />
-
-                <Input
-                  label="Profit:"
-                  placeholder="Enter Profit (default 0)"
-                  value={editForm.Profit || editForm.profit || '0'}
-                  onChange={(e) => handleInputChange('Profit', e.currentTarget.value)}
-                />
-
-                <Input
-                  label="Total:"
-                  placeholder="Enter Total (default 0)"
-                  value={editForm.Total || editForm.total || '0'}
-                  onChange={(e) => handleInputChange('Total', e.currentTarget.value)}
-                />
-
-                <Input
-                  label="Price:"
-                  placeholder="Enter Price (default 0)"
-                  value={editForm.Price || editForm.price || '0'}
-                  onChange={(e) => handleInputChange('Price', e.currentTarget.value)}
-                />
-
-                <Input
-                  label="Date:"
-                  type="date"
-                  value={editForm.Date || editForm.date || new Date().toISOString().split('T')[0]}
-                  onChange={(e) => handleInputChange('Date', e.currentTarget.value)}
-                />
-
-                <Group justify="right" mt="md">
-                  <Button variant="subtle" onClick={closeEditModal}>Cancel</Button>
-                  <Button onClick={handleSaveChanges} className="bg-[#1e40af] hover:bg-[#1e40af]/90">Save Changes</Button>
-                </Group>
+          {/* Mobile view - Cards */}
+          <div className="md:hidden">
+            {isLoading ? (
+              <div className="flex justify-center items-center py-10">
+                <LoadingOverlay visible={true} overlayProps={{ radius: "sm", blur: 2 }} />
+                <Text className="text-center py-4">Loading users...</Text>
               </div>
-            )}
-          </Modal>
-        </Tabs.Panel>
-
-        <Tabs.Panel value="monthlyData" pt="xs">
-          {/* Search Results for Monthly Data */}
-          {isLoading && (
-            <Card withBorder radius="md" className="relative">
-              <LoadingOverlay visible={true} blur={2} />
-              <Text className="text-center py-4">Loading...</Text>
-            </Card>
-          )}
-
-          {/* Monthly Data Table */}
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <Text className="text-lg font-bold text-gray-800">Monthly Data</Text>
-              <Text className="text-sm text-gray-500">
-                Showing {searchResults.length} record{searchResults.length !== 1 ? 's' : ''}
-              </Text>
-            </div>
-            <Paper radius="md" withBorder className="overflow-hidden border-gray-100 shadow-sm">
-              <Table verticalSpacing="md" horizontalSpacing="xl" className="min-w-[800px]">
-                <Table.Thead className="bg-gray-50/50">
-                  <Table.Tr>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">Name</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">User ID</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">Monthly Fee</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">Balance</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">Advance</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">Status</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">Month</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">Start Date</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">End Date</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">Profit</Table.Th>
-                    <Table.Th aria-label="Actions" />
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {(searchResults as MonthlyData[]).map((item) => (
-                    <Table.Tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
-                      <Table.Td>{item.name || 'N/A'}</Table.Td>
-                      <Table.Td>{item.id_user ? item.id_user.substring(0, 8) + '...' : 'N/A'}</Table.Td>
-                      <Table.Td className="font-bold text-gray-800">Rs. {item.monthlyFee || 0}</Table.Td>
-                      <Table.Td className="font-bold text-gray-800">Rs. {item.balance || 0}</Table.Td>
-                      <Table.Td className="font-bold text-gray-800">Rs. {item.advance || 0}</Table.Td>
-                      <Table.Td>
-                        <Badge
-                          variant="light"
-                          color={item.isPaid ? 'green' : 'orange'}
-                          radius="sm"
-                          className="font-bold py-3"
-                        >
-                          {item.isPaid ? 'PAID' : 'UNPAID'}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td>{item.monthYear || 'N/A'}</Table.Td>
-                      <Table.Td>{item.startDate || 'N/A'}</Table.Td>
-                      <Table.Td>{item.endDate || 'N/A'}</Table.Td>
-                      <Table.Td className="font-bold text-gray-800">Rs. {item.profit || 0}</Table.Td>
-                      <Table.Td>
+            ) : filteredUsers.length > 0 ? (
+              <div className="space-y-4">
+                {filteredUsers.map((user) => (
+                  <Paper key={user.id} radius="md" withBorder className="p-4 border-gray-100 shadow-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Text size="xs" className="text-gray-500">User ID:</Text>
+                        <Text className="font-semibold text-gray-700">{user.username}</Text>
+                      </div>
+                      <div>
+                        <Text size="xs" className="text-gray-500">Name:</Text>
+                        <Text className="text-gray-700">{user.name}</Text>
+                      </div>
+                      <div>
+                        <Text size="xs" className="text-gray-500">Address:</Text>
+                        <Text className="text-gray-700">{user.address}</Text>
+                      </div>
+                      <div>
+                        <Text size="xs" className="text-gray-500">Package:</Text>
+                        <Text className="text-gray-700">{user.package || 'N/A'}</Text>
+                      </div>
+                      <div>
+                        <Text size="xs" className="text-gray-500">Start Date:</Text>
+                        <Text className="text-gray-700">{user.startDate}</Text>
+                      </div>
+                      <div>
+                        <Text size="xs" className="text-gray-500">Total Payable Amount:</Text>
+                        <Text className="font-bold text-gray-800">Rs. {user.totalAmount.toFixed(2)}</Text>
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-2 border-t border-gray-100">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <Text size="xs" className="text-gray-500">Status:</Text>
+                          <Badge
+                            variant="light"
+                            color={user.isPaid ? 'green' : 'orange'}
+                            radius="sm"
+                            className="font-bold py-1 px-2 text-xs mt-1"
+                          >
+                            {user.isPaid ? 'PAID' : 'UNPAID'}
+                          </Badge>
+                        </div>
                         <Menu shadow="md" width={200}>
                           <Menu.Target>
-                            <ActionIcon variant="subtle" color="gray">
+                            <ActionIcon variant="subtle" color="gray" size="lg">
                               <IconDotsVertical size={16} />
                             </ActionIcon>
                           </Menu.Target>
 
                           <Menu.Dropdown>
-                            {!item.isPaid && (
-                              <Menu.Item
-                                onClick={() => {
-                                  // Mark as paid functionality
-                                  const docRef = doc(db, 'monthlydata', item.id);
-                                  updateDoc(docRef, {
-                                    isPaid: true,
-                                    paidByTime: new Date().toISOString(),
-                                    balance: 0
-                                  }).then(() => {
-                                    // Refresh data
-                                    handleSearch();
-                                  }).catch(error => {
-                                    console.error("Error updating document: ", error);
-                                  });
-                                }}
-                                leftSection={<IconCash size={14} />}
-                                color="green"
-                              >
-                                Mark as Paid
-                              </Menu.Item>
-                            )}
                             <Menu.Item
-                              onClick={() => {
-                                // Edit functionality
-                                setEditingItem(item);
-                                setEditForm({...item});
-                              }}
                               leftSection={<IconPencil size={14} />}
+                              onClick={() => handleEditClick(user)}
                             >
-                              Edit
+                              Edit User
                             </Menu.Item>
                             <Menu.Item
+                              leftSection={<IconCoin size={14} />}
                               onClick={() => {
-                                if (window.confirm(`Are you sure you want to delete this monthly data entry?`)) {
-                                  // Delete document from Firebase
-                                  const docRef = doc(db, 'monthlydata', item.id);
-                                  deleteDoc(docRef)
-                                    .then(() => {
-                                      // Update local state to reflect the deletion
-                                      setSearchResults(prev => prev.filter(u => u.id !== item.id));
-                                    })
-                                    .catch(error => {
-                                      console.error("Error deleting document: ", error);
+                                setSelectedUser(user);
+                                setIsPaidPaymentModalOpen(true);
+                              }}
+                            >
+                              Paid Payment
+                            </Menu.Item>
+                            <Menu.Divider />
+                            <Menu.Label>Danger zone</Menu.Label>
+                            <Menu.Item
+                              color="red"
+                              leftSection={<IconTrash size={14} />}
+                              onClick={async () => {
+                                if (window.confirm(`Are you sure you want to delete user ${user.name}?`)) {
+                                  try {
+                                    await deleteDoc(doc(db, 'uploadEntry', user.id));
+                                    setUsers(prev => prev.filter(u => u.id !== user.id));
+                                    notifications.show({
+                                      title: 'Success',
+                                      message: `User ${user.name} deleted successfully`,
+                                      color: 'green',
                                     });
+                                  } catch (error) {
+                                    console.error("Error deleting document: ", error);
+                                    notifications.show({
+                                      title: 'Error',
+                                      message: "Failed to delete user",
+                                      color: 'red',
+                                    });
+                                  }
                                 }
                               }}
-                              leftSection={<IconTrash size={14} />}
-                              color="red"
                             >
-                              Delete
+                              Delete User
                             </Menu.Item>
                           </Menu.Dropdown>
                         </Menu>
-                      </Table.Td>
-                    </Table.Tr>
-                  ))}
-                </Table.Tbody>
-              </Table>
-            </Paper>
-          </div>
-
-          {/* Edit Modal for Monthly Data */}
-          <Modal
-            opened={!!editingItem && activeTab === 'monthlyData'}
-            onClose={closeEditModal}
-            title={`Edit Monthly Data: ${editingItem?.name || editingItem?.id}`}
-            size="lg"
-          >
-            {editingItem && activeTab === 'monthlyData' && (
-              <div className="space-y-4">
-                <Input
-                  label="Name:"
-                  placeholder="Enter Name"
-                  value={editForm.name || ''}
-                  onChange={(e) => handleInputChange('name', e.currentTarget.value)}
-                />
-
-                <Input
-                  label="User ID:"
-                  placeholder="Enter User ID"
-                  value={editForm.id_user || ''}
-                  onChange={(e) => handleInputChange('id_user', e.currentTarget.value)}
-                />
-
-                <Input
-                  label="Monthly Fee:"
-                  placeholder="Enter Monthly Fee"
-                  type="number"
-                  value={editForm.monthlyFee || 0}
-                  onChange={(e) => handleInputChange('monthlyFee', parseFloat(e.currentTarget.value) || 0)}
-                />
-
-                <Input
-                  label="Balance:"
-                  placeholder="Enter Balance"
-                  type="number"
-                  value={editForm.balance || 0}
-                  onChange={(e) => handleInputChange('balance', parseFloat(e.currentTarget.value) || 0)}
-                />
-
-                <Input
-                  label="Advance:"
-                  placeholder="Enter Advance"
-                  type="number"
-                  value={editForm.advance || 0}
-                  onChange={(e) => handleInputChange('advance', parseFloat(e.currentTarget.value) || 0)}
-                />
-
-                <Input
-                  label="Profit:"
-                  placeholder="Enter Profit"
-                  type="number"
-                  value={editForm.profit || 0}
-                  onChange={(e) => handleInputChange('profit', parseFloat(e.currentTarget.value) || 0)}
-                />
-
-                <Input
-                  label="Month Year:"
-                  placeholder="Enter Month Year (YYYY-MM)"
-                  value={editForm.monthYear || ''}
-                  onChange={(e) => handleInputChange('monthYear', e.currentTarget.value)}
-                />
-
-                <Input
-                  label="Start Date:"
-                  type="date"
-                  value={editForm.startDate || ''}
-                  onChange={(e) => handleInputChange('startDate', e.currentTarget.value)}
-                />
-
-                <Input
-                  label="End Date:"
-                  type="date"
-                  value={editForm.endDate || ''}
-                  onChange={(e) => handleInputChange('endDate', e.currentTarget.value)}
-                />
-
-                <Group justify="right" mt="md">
-                  <Button variant="subtle" onClick={closeEditModal}>Cancel</Button>
-                  <Button
-                    onClick={async () => {
-                      if (!editingItem) return;
-
-                      try {
-                        const docRef = doc(db, 'monthlydata', editingItem.id);
-
-                        // Prepare update object with all fields except the ID
-                        const updateData: Record<string, any> = {};
-                        Object.keys(editForm).forEach(key => {
-                          if (key !== 'id') {
-                            updateData[key] = editForm[key];
-                          }
-                        });
-
-                        await updateDoc(docRef, updateData);
-
-                        // Update local state
-                        setSearchResults(prev => prev.map(u =>
-                          u.id === editingItem.id ? {...editingItem, ...updateData} : u
-                        ));
-
-                        setEditingItem(null);
-
-                        // Refresh the search results
-                        handleSearch();
-                      } catch (error) {
-                        console.error("Error updating document: ", error);
-                      }
-                    }}
-                    className="bg-[#1e40af] hover:bg-[#1e40af]/90"
-                  >
-                    Save Changes
-                  </Button>
-                </Group>
+                      </div>
+                    </div>
+                  </Paper>
+                ))}
               </div>
+            ) : (
+              <Paper radius="md" withBorder className="p-6 text-center text-gray-500 border-gray-100 shadow-sm">
+                {searchTerm ? 'No users found matching your search' : 'No users available'}
+              </Paper>
             )}
-          </Modal>
-        </Tabs.Panel>
-      </Tabs>
+          </div>
+        </div>
+      </div>
 
-      {!isLoading && noResults && searchTerm && (
-        <Card withBorder radius="md" className="mt-4">
-          <Text className="text-center py-4 text-gray-500">
-            No results found for "{searchTerm}" in {searchField === 'all' ? 'any field' : searchField}
+      {/* Edit Modal */}
+      <Modal
+        opened={!!editingUser}
+        onClose={closeEditModal}
+        title={
+          <Text className="flex items-center gap-2">
+            <IconPencil className="text-blue-600" size={20} />
+            Edit User: <span className="font-bold">{editingUser?.name || editingUser?.username}</span>
           </Text>
-        </Card>
-      )}
+        }
+        size="lg"
+        overlayProps={{
+          backgroundOpacity: 0.5,
+          blur: 3,
+        }}
+      >
+        {editingUser && (
+          <div className="space-y-5">
+            <Input.Wrapper label="User ID" description="This cannot be modified">
+              <Input
+                placeholder="Cannot be modified"
+                value={editingUser.username}
+                disabled
+                className="bg-gray-50"
+              />
+            </Input.Wrapper>
 
-      {/* Create User Modal */}
-      <CreationModals
-        opened={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        type="uploadEntry"
-      />
+            <Input.Wrapper label="Name" description="Update the user's name">
+              <Input
+                placeholder="Enter user name"
+                value={editForm.name || ''}
+                onChange={(e) => handleInputChange('name', e.currentTarget.value)}
+              />
+            </Input.Wrapper>
+
+            <Input.Wrapper label="Address" description="Update the user's address">
+              <Input
+                placeholder="Enter user address"
+                value={editForm.address || ''}
+                onChange={(e) => handleInputChange('address', e.currentTarget.value)}
+              />
+            </Input.Wrapper>
+
+            <Input.Wrapper label="Package" description="Update the user's package">
+              <Input
+                placeholder="Enter package"
+                value={editForm.package || ''}
+                onChange={(e) => handleInputChange('package', e.currentTarget.value)}
+              />
+            </Input.Wrapper>
+
+            <Input.Wrapper label="Phone" description="Update the user's phone number">
+              <Input
+                placeholder="Enter phone number"
+                value={editForm.phone || ''}
+                onChange={(e) => handleInputChange('phone', e.currentTarget.value)}
+              />
+            </Input.Wrapper>
+
+            <Input.Wrapper label="Monthly Fees" description="Update the monthly fees">
+              <Input
+                placeholder="Enter monthly fees"
+                type="number"
+                value={editForm.monthlyFees !== undefined && editForm.monthlyFees !== null ? String(editForm.monthlyFees) : "0"}
+                onChange={(e) => handleInputChange('monthlyFees', parseFloat(e.currentTarget.value) || 0)}
+              />
+            </Input.Wrapper>
+
+            <Divider my="sm" />
+
+            <Group justify="right" mt="md">
+              <Button variant="outline" onClick={closeEditModal} color="gray" className="border-gray-300">
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveChanges}
+                className="bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white shadow-md"
+              >
+                Save Changes
+              </Button>
+            </Group>
+          </div>
+        )}
+      </Modal>
+
+      {/* New User Modal */}
+      <Modal
+        opened={isNewUserModalOpen}
+        onClose={closeNewUserModal}
+        title={
+          <Text className="flex items-center gap-2">
+            <IconPlus className="text-green-600" size={20} />
+            Add New User
+          </Text>
+        }
+        size="lg"
+        overlayProps={{
+          backgroundOpacity: 0.5,
+          blur: 3,
+        }}
+      >
+        <div className="space-y-5">
+          <Input.Wrapper label="Username" description="Enter the user's username">
+            <Input
+              placeholder="Enter username"
+              value={String(newUserForm.username || '')}
+              onChange={(e) => handleNewUserInputChange('username', e.currentTarget.value)}
+            />
+          </Input.Wrapper>
+
+          <Input.Wrapper label="Name" description="Enter the user's name">
+            <Input
+              placeholder="Enter user name"
+              value={String(newUserForm.name || '')}
+              onChange={(e) => handleNewUserInputChange('name', e.currentTarget.value)}
+            />
+          </Input.Wrapper>
+
+          <Input.Wrapper label="Address" description="Enter the user's address">
+            <Input
+              placeholder="Enter user address"
+              value={String(newUserForm.address || '')}
+              onChange={(e) => handleNewUserInputChange('address', e.currentTarget.value)}
+            />
+          </Input.Wrapper>
+
+          <Input.Wrapper label="Package" description="Enter the user's package">
+            <Input
+              placeholder="Enter package"
+              value={String(newUserForm.package || '')}
+              onChange={(e) => handleNewUserInputChange('package', e.currentTarget.value)}
+            />
+          </Input.Wrapper>
+
+          <Input.Wrapper label="Phone" description="Enter the user's phone number">
+            <Input
+              placeholder="Enter phone number"
+              value={String(newUserForm.phone || '')}
+              onChange={(e) => handleNewUserInputChange('phone', e.currentTarget.value)}
+            />
+          </Input.Wrapper>
+
+          <Input.Wrapper label="Start Date" description="Select the start date">
+            <Input
+              type="date"
+              value={String(newUserForm.startDate || '')}
+              onChange={(e) => handleNewUserInputChange('startDate', e.currentTarget.value)}
+            />
+          </Input.Wrapper>
+
+          <Input.Wrapper label="Total Amount" description="Enter the total amount">
+            <Input
+              placeholder="Enter total amount"
+              type="number"
+              value={newUserForm.totalAmount !== undefined && newUserForm.totalAmount !== null ? String(newUserForm.totalAmount) : ""}
+              onChange={(e) => handleNewUserInputChange('totalAmount', parseFloat(e.currentTarget.value) || 0)}
+            />
+          </Input.Wrapper>
+
+          <Input.Wrapper label="Balance" description="Enter the balance">
+            <Input
+              placeholder="Enter balance"
+              type="number"
+              value={newUserForm.balance !== undefined && newUserForm.balance !== null ? String(newUserForm.balance) : ""}
+              onChange={(e) => handleNewUserInputChange('balance', parseFloat(e.currentTarget.value) || 0)}
+            />
+          </Input.Wrapper>
+
+          <Input.Wrapper label="Monthly Fees" description="Enter the monthly fees">
+            <Input
+              placeholder="Enter monthly fees"
+              type="number"
+              value={newUserForm.monthlyFees !== undefined && newUserForm.monthlyFees !== null ? String(newUserForm.monthlyFees) : ""}
+              onChange={(e) => handleNewUserInputChange('monthlyFees', parseFloat(e.currentTarget.value) || 0)}
+            />
+          </Input.Wrapper>
+
+          <Divider my="sm" />
+
+          <Group justify="right" mt="md">
+            <Button variant="outline" onClick={closeNewUserModal} color="gray" className="border-gray-300">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveNewUser}
+              className="bg-gradient-to-r from-green-600 to-green-800 hover:from-green-700 hover:to-green-900 text-white shadow-md"
+            >
+              Add User
+            </Button>
+          </Group>
+        </div>
+      </Modal>
+
+      {/* Payment Modal */}
+      <Modal
+        opened={isPaymentModalOpen}
+        onClose={closePaymentModal}
+        title={
+          <Text className="flex items-center gap-2">
+            <IconCoin className="text-green-600" size={20} />
+            {paymentType === 'make' ? 'Make Payment for:' : 'Paid Payment for:'} <span className="font-bold">{selectedUser?.name || selectedUser?.username}</span>
+          </Text>
+        }
+        size="lg"
+        overlayProps={{
+          backgroundOpacity: 0.5,
+          blur: 3,
+        }}
+      >
+        {selectedUser && (
+          <div className="space-y-5">
+            <div>
+              <Text size="sm" className="text-gray-600">Current Balance:</Text>
+              <Text className="text-xl font-bold text-gray-800">Rs. {selectedUser.balance.toFixed(2)}</Text>
+            </div>
+
+            <Input.Wrapper label="Payment Amount" description="Enter the payment amount">
+              <Input
+                placeholder="Enter payment amount"
+                type="number"
+                value={paymentAmount || ""}
+                onChange={(e) => setPaymentAmount(parseFloat(e.currentTarget.value) || 0)}
+              />
+            </Input.Wrapper>
+
+            <Select
+              label="Payment Method"
+              description="Choose the payment method"
+              placeholder="Select payment method"
+              value={paymentMethod}
+              onChange={(value) => value && setPaymentMethod(value)}
+              data={[
+                { value: 'cash', label: 'Cash' },
+                { value: 'bank', label: 'Bank Transfer' },
+                { value: 'mobile', label: 'Mobile Payment' },
+              ]}
+              leftSection={<IconCoin size={16} />}
+            />
+
+            <Divider my="sm" />
+
+            <Group justify="right" mt="md">
+              <Button variant="outline" onClick={closePaymentModal} color="gray" className="border-gray-300">
+                Cancel
+              </Button>
+              <Button
+                onClick={handleMakePayment}
+                loading={isProcessingPayment}
+                className="bg-gradient-to-r from-green-600 to-green-800 hover:from-green-700 hover:to-green-900 text-white shadow-md"
+              >
+                Process Payment
+              </Button>
+            </Group>
+          </div>
+        )}
+      </Modal>
+
+      {/* Make Payment 2 Modal */}
+      <Modal
+        opened={isMakePaymentModalOpen}
+        onClose={() => {
+          setIsMakePaymentModalOpen(false);
+          setPaymentAmount(0);
+          setSelectedUser(null);
+        }}
+        title={
+          <Text className="flex items-center gap-2">
+            <IconCoin className="text-green-600" size={20} />
+            Make Payment 2 for: <span className="font-bold">{selectedUser?.name || selectedUser?.username}</span>
+          </Text>
+        }
+        size="lg"
+        overlayProps={{
+          backgroundOpacity: 0.5,
+          blur: 3,
+        }}
+      >
+        {selectedUser && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Text size="sm" className="text-gray-600">Current Balance:</Text>
+                <Text className="text-xl font-bold text-gray-800">Rs. {selectedUser.balance.toFixed(2)}</Text>
+              </div>
+              <div>
+                <Text size="sm" className="text-gray-600">Monthly Fees:</Text>
+                <Text className="text-xl font-bold text-gray-800">Rs. {(selectedUser.monthlyFees || 0).toFixed(2)}</Text>
+              </div>
+              <div>
+                <Text size="sm" className="text-gray-600">Total Amount:</Text>
+                <Text className="text-xl font-bold text-gray-800">Rs. {selectedUser.totalAmount.toFixed(2)}</Text>
+              </div>
+            </div>
+
+            <Input.Wrapper label="Payment Amount" description="Enter the payment amount">
+              <Input
+                placeholder="Enter payment amount"
+                type="number"
+                value={paymentAmount || ""}
+                onChange={(e) => setPaymentAmount(parseFloat(e.currentTarget.value) || 0)}
+              />
+            </Input.Wrapper>
+
+            <Select
+              label="Payment Method"
+              description="Choose the payment method"
+              placeholder="Select payment method"
+              value={paymentMethod}
+              onChange={(value) => value && setPaymentMethod(value)}
+              data={[
+                { value: 'cash', label: 'Cash' },
+                { value: 'bank', label: 'Bank Transfer' },
+                { value: 'mobile', label: 'Mobile Payment' },
+              ]}
+              leftSection={<IconCoin size={16} />}
+            />
+
+            <Divider my="sm" />
+
+            <Group justify="right" mt="md">
+              <Button variant="outline" onClick={() => {
+                setIsMakePaymentModalOpen(false);
+                setPaymentAmount(0);
+                setSelectedUser(null);
+              }} color="gray" className="border-gray-300">
+                Cancel
+              </Button>
+              <Button
+                onClick={handleMakePayment2}
+                loading={isProcessingPayment}
+                className="bg-gradient-to-r from-green-600 to-green-800 hover:from-green-700 hover:to-green-900 text-white shadow-md"
+              >
+                Process Payment
+              </Button>
+            </Group>
+          </div>
+        )}
+      </Modal>
+
+      {/* Calculate Payment Modal */}
+      <Modal
+        opened={isTotalPaymentModalOpen}
+        onClose={() => {
+          setIsTotalPaymentModalOpen(false);
+          setTotalPaymentAmount(0);
+          setTotalBalance(0);
+          setTotalAmount(0);
+          setSelectedUser(null);
+        }}
+        title={
+          <Text className="flex items-center gap-2">
+            <IconCoin className="text-green-600" size={20} />
+            Calculate Payment for: <span className="font-bold">{selectedUser?.name || selectedUser?.username}</span>
+          </Text>
+        }
+        size="lg"
+        overlayProps={{
+          backgroundOpacity: 0.5,
+          blur: 3,
+        }}
+      >
+        {selectedUser && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Text size="sm" className="text-gray-600">Current Balance:</Text>
+                <Text className="text-xl font-bold text-gray-800">Rs. {selectedUser.balance.toFixed(2)}</Text>
+              </div>
+              <div>
+                <Text size="sm" className="text-gray-600">Monthly Fees:</Text>
+                <Text className="text-xl font-bold text-gray-800">Rs. {(selectedUser.monthlyFees || 0).toFixed(2)}</Text>
+              </div>
+              <div>
+                <Text size="sm" className="text-gray-600">Total Amount:</Text>
+                <Text className="text-xl font-bold text-gray-800">Rs. {selectedUser.totalAmount.toFixed(2)}</Text>
+              </div>
+            </div>
+
+            <Input.Wrapper label="Payment Amount" description="Enter the payment amount">
+              <Input
+                placeholder="Enter payment amount"
+                type="number"
+                value={totalPaymentAmount || ""}
+                onChange={(e) => {
+                  const payment = parseFloat(e.currentTarget.value) || 0;
+                  setTotalPaymentAmount(payment);
+                  
+                  // Calculate new balance based on current balance minus payment
+                  const newCalculatedBalance = selectedUser.balance - payment;
+                  setTotalBalance(Math.max(0, newCalculatedBalance)); // Ensure balance doesn't go negative
+                }}
+              />
+            </Input.Wrapper>
+
+            <Input.Wrapper label="New Balance" description="Calculated balance after payment">
+              <Input
+                placeholder="Calculated balance"
+                type="number"
+                value={totalBalance || ""}
+                onChange={(e) => setTotalBalance(parseFloat(e.currentTarget.value) || 0)}
+                readOnly
+              />
+            </Input.Wrapper>
+
+            <Select
+              label="Payment Method"
+              description="Choose the payment method"
+              placeholder="Select payment method"
+              value={paymentMethod}
+              onChange={(value) => value && setPaymentMethod(value)}
+              data={[
+                { value: 'cash', label: 'Cash' },
+                { value: 'bank', label: 'Bank Transfer' },
+                { value: 'mobile', label: 'Mobile Payment' },
+              ]}
+              leftSection={<IconCoin size={16} />}
+            />
+
+            <Divider my="sm" />
+
+            <Group justify="right" mt="md">
+              <Button variant="outline" onClick={() => {
+                setIsTotalPaymentModalOpen(false);
+                setTotalPaymentAmount(0);
+                setTotalBalance(0);
+                setTotalAmount(0);
+                setSelectedUser(null);
+              }} color="gray" className="border-gray-300">
+                Cancel
+              </Button>
+              <Button
+                onClick={handleTotalPayment}
+                loading={isProcessingPayment}
+                className="bg-gradient-to-r from-green-600 to-green-800 hover:from-green-700 hover:to-green-900 text-white shadow-md"
+              >
+                Process Payment
+              </Button>
+            </Group>
+          </div>
+        )}
+      </Modal>
+
+      {/* Paid Payment Modal */}
+      <Modal
+        opened={isPaidPaymentModalOpen}
+        onClose={() => {
+          setIsPaidPaymentModalOpen(false);
+          setPaidPaymentAmount(0);
+          setSelectedUser(null);
+        }}
+        title={
+          <Text className="flex items-center gap-2">
+            <IconCoin className="text-green-600" size={20} />
+            Paid Payment for: <span className="font-bold">{selectedUser?.name || selectedUser?.username}</span>
+          </Text>
+        }
+        size="lg"
+        overlayProps={{
+          backgroundOpacity: 0.5,
+          blur: 3,
+        }}
+      >
+        {selectedUser && (
+          <div className="space-y-5">
+            <div>
+              <Text size="sm" className="text-gray-600">Total Payable:</Text>
+              <Text className="text-xl font-bold text-gray-800">Rs. {(selectedUser.balance + (selectedUser.monthlyFees || 0)).toFixed(2)}</Text>
+            </div>
+
+            <Input.Wrapper label="Paid Payment Amount" description="Enter the paid payment amount">
+              <Input
+                placeholder="Enter paid payment amount"
+                type="number"
+                value={paidPaymentAmount || ""}
+                onChange={(e) => setPaidPaymentAmount(parseFloat(e.currentTarget.value) || 0)}
+              />
+            </Input.Wrapper>
+
+            <Select
+              label="Payment Method"
+              description="Choose the payment method"
+              placeholder="Select payment method"
+              value={paymentMethod}
+              onChange={(value) => value && setPaymentMethod(value)}
+              data={[
+                { value: 'cash', label: 'Cash' },
+                { value: 'bank', label: 'Bank Transfer' },
+                { value: 'mobile', label: 'Mobile Payment' },
+              ]}
+              leftSection={<IconCoin size={16} />}
+            />
+
+            <Divider my="sm" />
+
+            <Group justify="right" mt="md">
+              <Button variant="outline" onClick={() => {
+                setIsPaidPaymentModalOpen(false);
+                setPaidPaymentAmount(0);
+                setSelectedUser(null);
+              }} color="gray" className="border-gray-300">
+                Cancel
+              </Button>
+              <Button
+                onClick={handlePaidPayment}
+                loading={isProcessingPayment}
+                className="bg-gradient-to-r from-green-600 to-green-800 hover:from-green-700 hover:to-green-900 text-white shadow-md"
+              >
+                Process Paid Payment
+              </Button>
+            </Group>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

@@ -44,6 +44,19 @@ const mockData: NavItem[] = [
             { label: 'Roles & Permissions', link: '/users/roles' },
             { label: 'All USers', link: '/users/search' },
             { label: 'Upload Entry', link: '/users/uploadentry' },
+            { label: 'Collection Report', link: '/users/report' },
+        ]
+    },
+    {
+        label: 'User Dashboard',
+        icon: IconUsers,
+        initiallyOpened: false,
+        links: [
+            { label: 'Users Directory', link: '/users/detail' },
+            // { label: 'Roles & Permissions', link: '/users/roles' },
+            // { label: 'All USers', link: '/users/search' },
+            // { label: 'Upload Entry', link: '/users/uploadentry' },
+            // { label: 'Collection Report', link: '/users/report' },
         ]
     },
     {
@@ -62,8 +75,8 @@ const mockData: NavItem[] = [
         initiallyOpened: false,
         links: [
             { label: 'Organization Roster', link: '/employees' },
-            { label: 'Attendance Center', link: '/employees' },
-            { label: 'Leave Management', link: '/employees' },
+            { label: 'Attendance Center', link: '/attendance' },
+            { label: 'Leave Management', link: '/leave-management' },
         ]
     },
 ];
@@ -188,6 +201,17 @@ export function Sidebar({ opened, toggle, isMobile, closeMobile }: SidebarProps)
                         <IconChevronLeft size={20} />
                     </ActionIcon>
                 )}
+                
+                {opened && isMobile && (
+                    <ActionIcon 
+                        variant="transparent" 
+                        className="text-white/60 hover:text-white" 
+                        onClick={closeMobile} 
+                        size="sm"
+                    >
+                        <IconChevronLeft size={20} />
+                    </ActionIcon>
+                )}
             </div>
 
             {/* Scrollable Content */}
@@ -210,3 +234,4 @@ export function Sidebar({ opened, toggle, isMobile, closeMobile }: SidebarProps)
         </nav>
     );
 }
+

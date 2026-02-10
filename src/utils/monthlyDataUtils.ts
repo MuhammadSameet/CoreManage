@@ -16,11 +16,11 @@ export const createMonthlyDataForUser = async (uploadEntryId: string, userData: 
     const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
     
     // Extract relevant data from the upload entry
-    const monthlyFee = userData.MonthlyFee || userData.monthlyFee || userData['Monthly Fee'] || 0;
+    const monthlyFee = userData.MonthlyFee || userData.monthlyFee || userData['Monthly Fee'] || userData.Price || userData.price || 0;
     const advance = userData.advance || userData.Advance || 0;
     const profit = userData.Profit || userData.profit || 0;
     const name = userData.Username || userData.username || userData.name || userData.Name || userData.UserName || uploadEntryId;
-    
+
     // Create the monthly data entry
     const newMonthlyData = {
       name,
@@ -28,7 +28,7 @@ export const createMonthlyDataForUser = async (uploadEntryId: string, userData: 
       monthlyFee,
       balance: monthlyFee, // Initially, balance equals the monthly fee
       advance,
-      isPaid: false,
+      isPaid: false, // Default to unpaid
       profit,
       startDate: startDate.toISOString().split('T')[0],
       endDate: endDate.toISOString().split('T')[0],
@@ -61,7 +61,7 @@ export const updateMonthlyDataForUser = async (uploadEntryId: string, updatedUse
     const monthlySnapshot = await getDocs(monthlyQuery);
     
     // Update the name and other fields for all monthly entries of this user
-    const monthlyFee = updatedUserData.MonthlyFee || updatedUserData.monthlyFee || updatedUserData['Monthly Fee'] || 0;
+    const monthlyFee = updatedUserData.MonthlyFee || updatedUserData.monthlyFee || updatedUserData['Monthly Fee'] || updatedUserData.Price || updatedUserData.price || 0;
     const advance = updatedUserData.advance || updatedUserData.Advance || 0;
     const profit = updatedUserData.Profit || updatedUserData.profit || 0;
     const name = updatedUserData.Username || updatedUserData.username || updatedUserData.name || updatedUserData.Name || updatedUserData.UserName || uploadEntryId;

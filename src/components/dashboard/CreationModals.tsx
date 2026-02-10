@@ -111,15 +111,18 @@ export function CreationModals({ opened, onClose, type }: CreationModalProps) {
             } else if (type === 'uploadEntry') {
                 await handleUploadEntrySubmit(e);
             } else {
+                // For user/employee creation, save to Firebase users collection
                 await dispatch(signUpUser({
                     name: uploadEntryData.Username || 'N/A',
-                    email: uploadEntryData['User ID'] || 'N/A',
-                    password: uploadEntryData.Password,
-                    role: 'User'
+                    email: uploadEntryData['User ID'] || `temp-${Math.random().toString(36).substring(7)}@example.com`, // Use a temporary email if not provided
+                    password: uploadEntryData.Password || 'TempPass123!', // Use a temporary password if not provided
+                    role: type === 'employee' ? 'employee' : 'user', // Differentiate between user and employee roles
+                    username: uploadEntryData.Username // Pass username for uploadEntry
                 }));
+
                 notifications.show({
                     title: `${type === 'user' ? 'User' : 'Employee'} Created`,
-                    message: `New ${type === 'user' ? 'user' : 'employee'} ${uploadEntryData.Username || 'N/A'} has been added.`,
+                    message: `New ${type === 'user' ? 'user' : 'employee'} ${uploadEntryData.Username || 'N/A'} has been added to the system.`,
                     color: 'blue'
                 });
             }
@@ -267,6 +270,13 @@ export function CreationModals({ opened, onClose, type }: CreationModalProps) {
                                 placeholder="hello@example.com"
                                 value={uploadEntryData['User ID']}
                                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUploadEntryData({ ...uploadEntryData, 'User ID': e.target.value })}
+                            />
+                            <TextInput
+                                required
+                                label="Username/ID"
+                                placeholder="Enter username or ID"
+                                value={uploadEntryData.Username}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUploadEntryData({ ...uploadEntryData, Username: e.target.value })}
                             />
                             <PasswordInput
                                 required

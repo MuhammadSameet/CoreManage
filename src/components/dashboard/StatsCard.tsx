@@ -39,7 +39,7 @@ export function StatsCard({ title, value, variant = 'blue', action }: StatsCardP
                             size="compact-xs"
                             className="bg-gray-100/50 text-gray-500 hover:bg-gray-200 h-6 px-3 text-[10px] font-bold rounded-full transition-colors"
                             rightSection={<IconChevronRight size={10} />}
-                            onClick={action.onClick}
+                            onClick={action?.onClick}
                         >
                             {action.label}
                         </Button>

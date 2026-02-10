@@ -23,7 +23,11 @@ const Badge = MantineBadge;
 export function EmployeeDashboardSection() {
     const dispatch = useDispatch<AppDispatch>();
     const { usersList, loading } = useSelector((state: RootState) => state.userStates);
-    const [opened, { open, close }] = useDisclosure(false);
+    
+    // Separate disclosure hooks for different modal types
+    const [attendanceModalOpened, { open: openAttendanceModal, close: closeAttendanceModal }] = useDisclosure(false);
+    const [employeeModalOpened, { open: openEmployeeModal, close: closeEmployeeModal }] = useDisclosure(false);
+    const [userModalOpened, { open: openUserModal, close: closeUserModal }] = useDisclosure(false);
 
     useEffect(() => {
         dispatch(fetchAllUsers());
@@ -48,7 +52,23 @@ export function EmployeeDashboardSection() {
                     <Button
                         variant="light"
                         radius="md"
-                        onClick={open}
+                        onClick={openUserModal}
+                        className="font-bold border-indigo-100 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                    >
+                        Create User
+                    </Button>
+                    <Button
+                        variant="light"
+                        radius="md"
+                        onClick={openEmployeeModal}
+                        className="font-bold border-indigo-100 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                    >
+                        Create Employee
+                    </Button>
+                    <Button
+                        variant="light"
+                        radius="md"
+                        onClick={openAttendanceModal}
                         className="font-bold border-indigo-100"
                     >
                         Mark Attendance
@@ -122,7 +142,9 @@ export function EmployeeDashboardSection() {
                 </div>
             </div>
 
-            <CreationModals opened={opened} onClose={close} type="attendance" />
+            <CreationModals opened={attendanceModalOpened} onClose={closeAttendanceModal} type="attendance" />
+            <CreationModals opened={employeeModalOpened} onClose={closeEmployeeModal} type="employee" />
+            <CreationModals opened={userModalOpened} onClose={closeUserModal} type="user" />
         </div>
     );
 }
