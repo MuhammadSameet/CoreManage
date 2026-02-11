@@ -116,7 +116,7 @@ export function UploadEntryClient() {
                         if (value !== '' && value !== null && value !== undefined) {
                             hasData = true;
                         }
-                    }); 
+                    });
 
                     if (hasData) {
                         data.push(rowObj);
