@@ -116,7 +116,7 @@ export function UploadEntryClient() {
                         if (value !== '' && value !== null && value !== undefined) {
                             hasData = true;
                         }
-                    });
+                    }); 
 
                     if (hasData) {
                         data.push(rowObj);
@@ -184,12 +184,12 @@ export function UploadEntryClient() {
 
                 // Check if a document with the same user ID already exists in uploadEntry
                 const userId = (dataToUpload as Record<string, any>)['User ID'] || (dataToUpload as Record<string, any>)['Username'] || (dataToUpload as Record<string, any>)['username'] || (dataToUpload as Record<string, any>)['id'] || (dataToUpload as Record<string, any>)['ID'];
-                
+
                 if (userId) {
                     // Query for existing document with the same user ID
                     const q = query(collection(db, 'uploadEntry'), where('id', '==', userId));
                     const querySnapshot = await getDocs(q);
-                    
+
                     if (!querySnapshot.empty) {
                         // If document exists, update it instead of creating a new one
                         const existingDoc = querySnapshot.docs[0];
@@ -199,19 +199,19 @@ export function UploadEntryClient() {
                     } else {
                         // If document doesn't exist, create a new one
                         const docRef = await addDoc(collection(db, 'uploadEntry'), dataToUpload);
-                        
+
                         // Create corresponding monthly data entry
                         await createMonthlyDataForUser(docRef.id, dataToUpload);
-                        
+
                         return docRef;
                     }
                 } else {
                     // If no user ID is provided, create a new document
                     const docRef = await addDoc(collection(db, 'uploadEntry'), dataToUpload);
-                    
+
                     // Create corresponding monthly data entry
                     await createMonthlyDataForUser(docRef.id, dataToUpload);
-                    
+
                     return docRef;
                 }
             });
@@ -324,7 +324,7 @@ export function UploadEntryClient() {
                     </div>
 
                     <Paper radius="lg" withBorder className="overflow-hidden border-gray-200 shadow-lg">
-                        <div className="overflow-x-auto">
+                        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent pb-3">
                             <Table verticalSpacing="md" horizontalSpacing="lg" className="min-w-[900px]">
                                 <Table.Thead className="bg-gradient-to-r from-blue-50 to-indigo-50">
                                     <Table.Tr>

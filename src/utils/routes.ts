@@ -3,10 +3,12 @@
 const publicRoutes: string[] = [
     '/login',
     '/signup',
-    '/404'
+    '/forgot-password',
+    // '/404'
 ];
 
 const privateRoutes: string[] = [
+    '/',
     '/about',
     '/users',
     '/users/roles',
@@ -22,7 +24,7 @@ const privateRoutes: string[] = [
 
 // Routes that are BLOCKED for ALL roles (admin, employee, user) - redirect to 404
 const blockedRoutes: string[] = [
-    '/',
+    // '/',
     '/payments',
     '/attendance',
     '/leave-management',

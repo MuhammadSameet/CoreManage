@@ -65,13 +65,13 @@ export function Header({ opened, toggle }: HeaderProps) {
 
     return (
         <div className="h-16 px-4 md:px-6 flex items-center justify-between bg-white border-b border-gray-200 sticky top-0 z-20">
-            <Group>
-                <div className="md:hidden">
-                    <ActionIcon onClick={toggle} variant="subtle" color="gray" size="lg">
-                        <IconMenu2 size={22} />
+            <Group gap="sm">
+                {!opened && (
+                    <ActionIcon onClick={toggle} variant="subtle" color="gray" size="lg" className="rounded-md hover:bg-gray-100 transition-colors md:hidden">
+                        <IconMenu2 size={24} />
                     </ActionIcon>
-                </div>
-                <Text className="font-bold text-gray-800 hidden md:block" style={{ fontSize: 'var(--text-lg)' }}>{title}</Text>
+                )}
+                <Text className="font-bold text-gray-800 hidden md:block tracking-tight" style={{ fontSize: 'var(--text-xl)' }}>{title}</Text>
             </Group>
 
             <Text className="font-bold text-gray-800 md:hidden" style={{ fontSize: 'var(--text-base)' }}>{title}</Text>

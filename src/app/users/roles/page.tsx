@@ -65,54 +65,52 @@ export default function RolesPage() {
   const renderTable = (title: string, list: UserRow[], color: string) => (
     <Paper p="xl" radius="md" withBorder shadow="sm" key={title}>
       <Title order={4} className="page-heading mb-4" style={{ fontSize: 'var(--text-lg)' }}>{title}</Title>
-      <div className="overflow-x-auto -mx-2 sm:mx-0">
+      <div className="overflow-x-auto -mx-2 sm:mx-0 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent pb-2">
         <Table verticalSpacing="md" highlightOnHover className="mantine-Table-root min-w-[500px]">
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th>Name</Table.Th>
-            <Table.Th>Email</Table.Th>
-            <Table.Th>Username</Table.Th>
-            <Table.Th>Role</Table.Th>
-            <Table.Th style={{ textAlign: 'right' }}>Actions</Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {list.length === 0 ? (
+          <Table.Thead className="bg-gray-50/50">
             <Table.Tr>
-              <Table.Td colSpan={5}>
-                <Text size="sm" c="dimmed">No users in this role.</Text>
-              </Table.Td>
+              <Table.Th className="py-4 text-gray-500 font-bold uppercase tracking-wider" style={{ fontSize: 'var(--text-sm)' }}>Name</Table.Th>
+              <Table.Th className="py-4 text-gray-500 font-bold uppercase tracking-wider" style={{ fontSize: 'var(--text-sm)' }}>Email</Table.Th>
+              <Table.Th className="py-4 text-gray-500 font-bold uppercase tracking-wider" style={{ fontSize: 'var(--text-sm)' }}>Username</Table.Th>
+              <Table.Th className="py-4 text-gray-500 font-bold uppercase tracking-wider" style={{ fontSize: 'var(--text-sm)' }}>Role</Table.Th>
+              <Table.Th className="py-4 text-gray-500 font-bold uppercase tracking-wider text-right" style={{ fontSize: 'var(--text-sm)' }}>Actions</Table.Th>
             </Table.Tr>
-          ) : (
-            list.map((row) => (
-              <Table.Tr key={row.docId}>
-                <Table.Td><Text fw={600} size="sm">{row.name || '—'}</Text></Table.Td>
-                <Table.Td><Text size="sm">{row.email || '—'}</Text></Table.Td>
-                <Table.Td><Text size="sm">{(row as UserRow & { username?: string }).username || '—'}</Text></Table.Td>
-                <Table.Td>
-                  <Badge color={color} variant="light" size="sm" radius="sm">{row.role || 'user'}</Badge>
-                </Table.Td>
-                <Table.Td>
-                  <Group gap="xs" justify="flex-end">
-                    <ActionIcon variant="subtle" color="gray" onClick={() => openEdit(row)}>
-                      <IconEdit size={16} />
-                    </ActionIcon>
-                  </Group>
-                </Table.Td>
+          </Table.Thead>
+          <Table.Tbody>
+            {list.length === 0 ? (
+              <Table.Tr>
+                <Table.Td colSpan={5} className="py-8 text-center text-gray-400 italic">No users in this role.</Table.Td>
               </Table.Tr>
-            ))
-          )}
-        </Table.Tbody>
-      </Table>
+            ) : (
+              list.map((row) => (
+                <Table.Tr key={row.docId} className="hover:bg-gray-50/40 transition-colors">
+                  <Table.Td className="py-3"><Text fw={700} style={{ fontSize: 'var(--text-base)' }}>{row.name || '—'}</Text></Table.Td>
+                  <Table.Td className="py-3"><Text style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}>{row.email || '—'}</Text></Table.Td>
+                  <Table.Td className="py-3"><Text style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)' }}>{(row as UserRow & { username?: string }).username || '—'}</Text></Table.Td>
+                  <Table.Td className="py-3">
+                    <Badge color={color} variant="light" size="lg" radius="sm" className="font-bold">{row.role || 'user'}</Badge>
+                  </Table.Td>
+                  <Table.Td className="py-3">
+                    <Group gap="xs" justify="flex-end">
+                      <ActionIcon variant="light" color="blue" onClick={() => openEdit(row)} className="rounded-md">
+                        <IconEdit size={18} />
+                      </ActionIcon>
+                    </Group>
+                  </Table.Td>
+                </Table.Tr>
+              ))
+            )}
+          </Table.Tbody>
+        </Table>
       </div>
     </Paper>
   );
 
   return (
-    <Stack gap="lg">
-      <div>
-        <Title order={2} className="page-heading">Roles & Permissions</Title>
-        <Text className="page-description">View and edit users by role.</Text>
+    <Stack gap="xl" className="max-w-[1400px] mx-auto w-full">
+      <div className="mb-6">
+        <Title order={1} className="page-heading" style={{ fontSize: 'var(--text-3xl)', fontWeight: 800 }}>Roles & Permissions</Title>
+        <Text className="page-description mt-2" style={{ fontSize: 'var(--text-lg)' }}>Manage access levels and oversee user roles across the platform.</Text>
       </div>
 
       {loading && usersList.length === 0 ? (

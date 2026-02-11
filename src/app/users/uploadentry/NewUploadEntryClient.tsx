@@ -142,6 +142,81 @@ export function NewUploadEntryClient() {
     };
 
     // Submit: if username exists in Data collection, update only date; else save as current behavior
+    // const handleSubmit = async () => {
+    //     if (parsedData.length === 0) {
+    //         toast.error('No data to upload. Please preview the file first!');
+    //         return;
+    //     }
+
+    //     setLoading(true);
+    //     toast.info('Uploading...');
+
+    //     try {
+    //         const uploadPromises = parsedData.map(async (row) => {
+    //             const username = String(row['Username'] ?? row['username'] ?? row['User ID'] ?? row['id'] ?? '').trim();
+    //             const csvDate = row['Date'] ?? row['date'] ?? new Date().toISOString().split('T')[0];
+
+    //             const dataDocRef = doc(db, 'Data', username);
+    //             const dataSnap = await getDoc(dataDocRef);
+
+    //             //  if (dataSnap.exists()) {
+    //             //         await updateDoc(dataDocRef, { Date: csvDate });
+    //             //         return;
+    //             //     }
+
+    //             //     await createUserOrUpdateData(row);
+    //             //     const { paid, isPaid, status, Price, price, Profit, profit, Total, total, ...cleanRow } = row;
+    //             //     const dataToUpload = {
+    //             //         ...cleanRow,
+    //             //         Price: 0,
+    //             //         Profit: 0,
+    //             //         Total: 0,
+    //             //         isPaid: false,
+    //             //         address: (row['Address'] ?? row['address'] ?? 'pakistan') as string,
+    //             //         uploadedAt: serverTimestamp(),
+    //             //     };
+
+    //             //     const docRef = await addDoc(collection(db, 'uploadEntry'), dataToUpload);
+    //             //     await createMonthlyDataForUser(docRef.id, dataToUpload);
+
+    //             //     await setDoc(doc(db, 'Data', username), { ...cleanRow, Date: csvDate });
+    //             if (dataSnap.exists()) {
+    //                 const masterData = dataSnap.data();
+
+    //                 const newUploadData = {
+    //                     username: username,
+    //                     name: masterData.name || '',
+    //                     address: masterData.address || '',
+    //                     package: masterData.package || '',
+    //                     amount: masterData.amount || 0,
+    //                     Date: csvDate,
+    //                     isPaid: false,
+    //                     invoiceId: row['Invoice ID'] || '',
+    //                     uploadedAt: serverTimestamp(),
+    //                 };
+
+    //                 const docRef = await addDoc(collection(db, 'uploadEntry'), newUploadData);
+
+    //                 await createMonthlyDataForUser(docRef.id, newUploadData);
+
+    //                 return;
+    //             }
+
+    //         });
+
+    //         await Promise.all(uploadPromises);
+    //         toast.success(`Uploaded ${parsedData.length} records.`);
+
+    //         setFile(null);
+    //         setParsedData([]);
+    //         setShowPreview(false);
+    //     } catch (err) {
+    //         toast.error('Upload failed. Please try again.');
+    //     }
+
+    //     setLoading(false);
+    // };
+    //chatgpt logic
     const handleSubmit = async () => {
         if (parsedData.length === 0) {
             toast.error('No data to upload. Please preview the file first!');
@@ -153,42 +228,86 @@ export function NewUploadEntryClient() {
 
         try {
             const uploadPromises = parsedData.map(async (row) => {
-                const username = String(row['Username'] ?? row['username'] ?? row['User ID'] ?? row['id'] ?? '').trim();
-                const csvDate = row['Date'] ?? row['date'] ?? new Date().toISOString().split('T')[0];
+                const username = String(
+                    row['Username'] ??
+                    row['username'] ??
+                    row['User ID'] ??
+                    row['id'] ??
+                    ''
+                ).trim();
+
+                if (!username) return;
+
+                const csvDate =
+                    row['Date'] ??
+                    row['date'] ??
+                    new Date().toISOString().split('T')[0];
 
                 const dataDocRef = doc(db, 'Data', username);
                 const dataSnap = await getDoc(dataDocRef);
 
+                let finalData;
+
+                // ✅ EXISTING USER → Copy Edited Master Data
                 if (dataSnap.exists()) {
-                    await updateDoc(dataDocRef, { Date: csvDate });
-                    return;
+                    const masterData = dataSnap.data();
+
+                    finalData = {
+                        username,
+                        name: masterData.name || 'N/A',
+                        address: masterData.address || 'N/A',
+                        package: masterData.package || 'N/A',
+                        // amount: masterData.monthlyFees || 0,
+                        // monthlyFees: masterData.monthlyFees || 'sameet',
+                        // amount: masterData.amount || 0,
+                        amount: masterData.monthlyFees || 'sameet',
+                        Date: csvDate,
+                        invoiceId: row['Invoice ID'] || 'N/A',
+                        isPaid: false,
+                        uploadedAt: serverTimestamp(),
+                    };
                 }
 
-                await createUserOrUpdateData(row);
-                const { paid, isPaid, status, Price, price, Profit, profit, Total, total, ...cleanRow } = row;
-                const dataToUpload = {
-                    ...cleanRow,
-                    Price: 0,
-                    Profit: 0,
-                    Total: 0,
-                    isPaid: false,
-                    address: (row['Address'] ?? row['address'] ?? 'pakistan') as string,
-                    uploadedAt: serverTimestamp(),
-                };
+                // ✅ NEW USER → First Time Amount = 0
+                else {
+                    finalData = {
+                        username,
+                        name: 'N/A',
+                        address: 'N/A',
+                        package: row['Package'] || 'N/A',
+                        amount: 0, // 🔥 ALWAYS ZERO FIRST TIME
+                        monthlyFees: 0,
+                        Date: csvDate,
+                        invoiceId: row['Invoice ID'] || 'N/A',
+                        isPaid: false,
+                        uploadedAt: serverTimestamp(),
+                    };
 
-                const docRef = await addDoc(collection(db, 'uploadEntry'), dataToUpload);
-                await createMonthlyDataForUser(docRef.id, dataToUpload);
+                    // Create master profile for future
+                    await setDoc(dataDocRef, {
+                        username,
+                        name: 'N/A',
+                        address: 'N/A',
+                        package: row['Package'] || 'N/A',
+                        amount: 0,
+                    });
+                }
 
-                await setDoc(doc(db, 'Data', username), { ...cleanRow, Date: csvDate });
+                // 🔥 Always create monthly record
+                const docRef = await addDoc(collection(db, 'uploadEntry'), finalData);
+
+                await createMonthlyDataForUser(docRef.id, finalData);
             });
 
             await Promise.all(uploadPromises);
+
             toast.success(`Uploaded ${parsedData.length} records.`);
 
             setFile(null);
             setParsedData([]);
             setShowPreview(false);
-        } catch (err) {
+        } catch (error) {
+            console.error(error);
             toast.error('Upload failed. Please try again.');
         }
 

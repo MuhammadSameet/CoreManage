@@ -37,7 +37,12 @@ export function DashboardCharts() {
       try {
         const paymentsSnap = await getDocs(collection(db, 'payments'));
         const paymentsByWeek: Record<string, number> = {};
-        let totalPaid = 0;
+        let totalPaidToday = 0;
+
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+
         paymentsSnap.docs.forEach((docSnap) => {
           const d = docSnap.data();
           const amount = typeof d.amount === 'number' ? d.amount : parseFloat(d.amount) || 0;
@@ -45,17 +50,26 @@ export function DashboardCharts() {
           if (!dateVal) return;
           const date = typeof dateVal === 'string' ? new Date(dateVal) : dateVal?.seconds ? new Date(dateVal.seconds * 1000) : null;
           if (!date || isNaN(date.getTime())) return;
+
           const key = getWeekKey(date);
           paymentsByWeek[key] = (paymentsByWeek[key] || 0) + amount;
-          totalPaid += amount;
+
+          const timestamp = date.getTime();
+          if (timestamp >= startOfToday && timestamp <= endOfToday) {
+            totalPaidToday += amount;
+          }
         });
 
         const uploadEntrySnap = await getDocs(collection(db, 'uploadEntry'));
-        let totalUnpaid = 0;
+        let totalUnpaidToday = 0;
+
         uploadEntrySnap.docs.forEach((docSnap) => {
           const d = docSnap.data();
           const balance = typeof d.balance === 'number' ? d.balance : parseFloat(d.balance) || 0;
-          totalUnpaid += balance;
+
+          // User wants "Today Distribution (1 Day)" for both. 
+          // For unpaid, we show current outstanding balances as they are "unpaid as of today".
+          totalUnpaidToday += balance;
         });
 
         if (cancelled) return;
@@ -63,27 +77,25 @@ export function DashboardCharts() {
         const sortedWeeks = Object.keys(paymentsByWeek).sort();
         const last6 = sortedWeeks.slice(-6);
         if (last6.length === 0) {
-          const now = new Date();
           for (let i = 5; i >= 0; i--) {
             const w = new Date(now);
             w.setDate(w.getDate() - 7 * i);
             last6.push(getWeekKey(w));
           }
         }
+
         const barData = last6.map((key) => ({
           week: getWeekLabel(key),
           Paid: Math.round(paymentsByWeek[key] || 0),
-          Unpaid: key === last6[last6.length - 1] ? Math.round(totalUnpaid) : 0,
-          Total: Math.round((paymentsByWeek[key] || 0) + (key === last6[last6.length - 1] ? totalUnpaid : 0)),
+          Unpaid: key === last6[last6.length - 1] ? Math.round(totalUnpaidToday) : 0,
+          Total: Math.round((paymentsByWeek[key] || 0) + (key === last6[last6.length - 1] ? totalUnpaidToday : 0)),
         }));
+
         setWeeklyData(barData);
-        setTotals({ paid: totalPaid, unpaid: totalUnpaid, total: totalPaid + totalUnpaid });
+        setTotals({ paid: totalPaidToday, unpaid: totalUnpaidToday, total: totalPaidToday + totalUnpaidToday });
       } catch {
         if (!cancelled) {
-          setWeeklyData([
-            { week: 'Wk 1', Paid: 0, Unpaid: 0, Total: 0 },
-            { week: 'Wk 2', Paid: 0, Unpaid: 0, Total: 0 },
-          ]);
+          setWeeklyData([]);
           setTotals({ paid: 0, unpaid: 0, total: 0 });
         }
       } finally {
@@ -96,13 +108,14 @@ export function DashboardCharts() {
 
   const pieData = useMemo(() => {
     const items = [
-      { name: 'Paid', value: totals.paid, color: 'violet.6' },
-      { name: 'Unpaid', value: totals.unpaid, color: 'blue.6' },
+      { name: 'Paid Today', value: totals.paid, color: 'blue.6' },
+      { name: 'Unpaid Today', value: totals.unpaid, color: 'orange.6' },
+      { name: 'Total Status', value: totals.total, color: 'teal.6' },
     ].filter((d) => d.value > 0);
+
     if (items.length === 0) {
       return [
-        { name: 'Paid', value: 1, color: 'violet.6' },
-        { name: 'Unpaid', value: 1, color: 'blue.6' },
+        { name: 'No Data', value: 1, color: 'gray.4' },
       ];
     }
     return items;
@@ -117,14 +130,14 @@ export function DashboardCharts() {
   }
 
   return (
-    <Stack gap="lg" className="w-full">
+    <Stack gap="xl" className="w-full">
       <div className="flex flex-col lg:flex-row gap-6 w-full">
-        <Paper p="md" radius="md" withBorder className="flex-1 min-w-0 border-gray-100 shadow-sm">
-          <Text size="sm" fw={600} c="dimmed" mb="sm" style={{ fontSize: 'var(--text-sm)' }}>
-            Weekly amounts
+        <Paper p="xl" radius="lg" withBorder className="flex-[1.8] min-w-0 border-gray-100 shadow-sm bg-white">
+          <Text size="lg" fw={700} c="gray.8" mb="xl">
+            Weekly Payments Overview
           </Text>
           <BarChart
-            h={280}
+            h={350}
             data={weeklyData}
             dataKey="week"
             series={[
@@ -133,22 +146,26 @@ export function DashboardCharts() {
               { name: 'Total', color: 'teal.6' },
             ]}
             valueFormatter={(value) => formatter.format(value)}
+            withBarValueLabel
+            tickLine="none"
+            gridAxis="xy"
             style={{ maxWidth: '100%' }}
           />
         </Paper>
-        <Paper p="md" radius="md" withBorder className="flex-1 min-w-0 border-gray-100 shadow-sm">
-          <Text size="sm" fw={600} c="dimmed" mb="sm" style={{ fontSize: 'var(--text-sm)' }}>
-            Amounts breakdown
+        <Paper p="xl" radius="lg" withBorder className="flex-1 min-w-0 border-gray-100 shadow-sm bg-white">
+          <Text size="lg" fw={700} c="gray.8" mb="xl">
+            Today Distribution (1 Day)
           </Text>
-          <div className="flex justify-center">
+          <div className="flex justify-center items-center h-[350px]">
             <PieChart
               data={pieData}
+              withLabelsLine
+              size={200}
               withLabels
               labelsPosition="outside"
               labelsType="value"
-              withLabelsLine
-              size={260}
               valueFormatter={(value) => formatter.format(value)}
+              strokeWidth={2}
             />
           </div>
         </Paper>

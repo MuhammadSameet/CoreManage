@@ -1032,7 +1032,7 @@ export default function UploadEntrySearchTable() {
         </div>
 
         {/* Responsive table container */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent pb-3">
           {/* Desktop/Tablet view - Table */}
           <div className="hidden md:block">
             <Paper radius="md" withBorder className="overflow-hidden border-gray-100 shadow-sm">
