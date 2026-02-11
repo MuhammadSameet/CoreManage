@@ -55,12 +55,14 @@ export default function UploadEntrySearchTable() {
   const [totalPaymentAmount, setTotalPaymentAmount] = useState<number>(0);
   const [totalBalance, setTotalBalance] = useState<number>(0);
   const [totalAmount, setTotalAmount] = useState<number>(0);
-  const [paymentType, setPaymentType] = useState<'make' | 'paid'>('make'); // 'make' for regular payment, 'paid' for paid payment
+  const [paymentType, setPaymentType] = useState<'make' | 'paid'>('make');
   const [paymentMethod, setPaymentMethod] = useState<string>('cash');
   const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
-  const [authUser, setAuthUser] = useState<any>(null); // Store authenticated user info
-  const [loggedInUser, setLoggedInUser] = useState<string>('System User'); // Store logged in user's name
-  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]); // Date range for filtering
+  const [authUser, setAuthUser] = useState<any>(null);
+  const [loggedInUser, setLoggedInUser] = useState<string>('System User');
+  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [slipData, setSlipData] = useState<{ paidByName: string; paidDate: string; username: string; name: string; payableAmount: number; currentBalance: number; paymentType: string } | null>(null);
 
   // Get the authenticated user on component mount
   useEffect(() => {
@@ -100,8 +102,7 @@ export default function UploadEntrySearchTable() {
             // Fallback to display name, email, or default if Firebase doc doesn't exist
             setLoggedInUser(authUser.displayName || authUser.email?.split('@')[0] || 'System User');
           }
-        } catch (error) {
-          console.error("Error fetching logged in user data:", error);
+        } catch {
           setLoggedInUser(authUser.displayName || authUser.email?.split('@')[0] || 'System User');
         }
       }
@@ -224,8 +225,7 @@ export default function UploadEntrySearchTable() {
             } else {
               username = data.userId;
             }
-          } catch (err) {
-            console.error('Error fetching user data for payment:', err);
+          } catch {
             username = data.userId;
           }
         }
@@ -249,8 +249,7 @@ export default function UploadEntrySearchTable() {
       }
 
       setUsers(usersData);
-    } catch (error) {
-      console.error('Error fetching users:', error);
+    } catch {
       setUsers([]);
     } finally {
       setIsLoading(false);
@@ -335,14 +334,12 @@ export default function UploadEntrySearchTable() {
     });
   };
 
-  // Handle save changes
+  // Handle save changes (updates uploadEntry and Data collection for consistency)
   const handleSaveChanges = async () => {
     if (!editingUser) return;
 
     try {
       const docRef = doc(db, 'uploadEntry', editingUser.id);
-
-      // Prepare update object - only allow updating editable fields
       const updateData: Partial<User> = {
         name: editForm.name,
         address: editForm.address,
@@ -353,14 +350,35 @@ export default function UploadEntrySearchTable() {
 
       await updateDoc(docRef, updateData);
 
-      // Update local state
+      const dataRef = doc(db, 'Data', editingUser.username);
+      const dataSnap = await getDoc(dataRef);
+      if (dataSnap.exists()) {
+        await updateDoc(dataRef, {
+          name: updateData.name,
+          address: updateData.address,
+          package: updateData.package,
+          phone: updateData.phone,
+          monthlyFees: updateData.monthlyFees
+        });
+      }
+
       setUsers(prev => prev.map(u =>
         u.id === editingUser.id ? { ...editingUser, ...updateData } : u
       ));
-
       setEditingUser(null);
-    } catch (error) {
-      console.error("Error updating document: ", error);
+      notifications.show({
+        title: 'Saved',
+        message: 'User details updated.',
+        color: 'green',
+        position: 'top-right'
+      });
+    } catch {
+      notifications.show({
+        title: 'Update failed',
+        message: 'Could not save changes. Try again.',
+        color: 'red',
+        position: 'top-right'
+      });
     }
   };
 
@@ -421,8 +439,8 @@ export default function UploadEntrySearchTable() {
         phone: ''
       });
       setIsNewUserModalOpen(false);
-    } catch (error) {
-      console.error("Error adding new user: ", error);
+    } catch {
+      notifications.show({ title: 'Error', message: 'Could not add user.', color: 'red', position: 'top-right' });
     }
   };
 
@@ -504,10 +522,10 @@ export default function UploadEntrySearchTable() {
         isPaid: isPaid
       });
 
-      // Create a payment record in a separate collection
+      const paidDateStr = new Date().toISOString();
       await addDoc(collection(db, 'payments'), {
         amount: paidPaymentAmount,
-        date: new Date().toISOString(),
+        date: paidDateStr,
         isPaid: true,
         newBalance: newBalance,
         newMonthlyFees: newMonthlyFees,
@@ -516,36 +534,51 @@ export default function UploadEntrySearchTable() {
         method: paymentMethod,
         userId: selectedUser.id,
         userName: selectedUser.name,
-        paidByName: loggedInUser, // Use the logged-in user's name
-        paidByDateTime: new Date().toISOString() // Current date and time
+        paidByName: loggedInUser,
+        paidByDateTime: paidDateStr
       });
 
-      // Update local state
-      setUsers(prev => prev.map(u =>
-        u.id === selectedUser.id
-          ? { ...u, balance: newBalance, monthlyFees: newMonthlyFees, isPaid: isPaid }
-          : u
-      ));
+      const payableAmount = selectedUser.balance + (selectedUser.monthlyFees || 0);
+      if (isPaid && newBalance <= 0 && newMonthlyFees <= 0) {
+        await deleteDoc(doc(db, 'uploadEntry', selectedUser.id));
+        setUsers(prev => prev.filter(u => u.id !== selectedUser.id));
+      } else {
+        setUsers(prev => prev.map(u =>
+          u.id === selectedUser.id
+            ? { ...u, balance: newBalance, monthlyFees: newMonthlyFees, isPaid: isPaid }
+            : u
+        ));
+      }
 
-      // Close the modal and reset state
       setIsPaidPaymentModalOpen(false);
       setPaidPaymentAmount(0);
       setSelectedUser(null);
 
-      notifications.show({
-        title: 'Paid Payment Successful',
-        message: `Successfully processed paid payment of Rs. ${paidPaymentAmount.toFixed(2)} for ${selectedUser.name}. New balance: Rs. ${newBalance.toFixed(2)}, New monthly fees: Rs. ${newMonthlyFees.toFixed(2)}`,
-        color: 'green',
-        position: 'top-right'
+      const methodLabel = paymentMethod === 'cash' ? 'Cash' : paymentMethod === 'bank' ? 'Bank Transfer' : 'Mobile Payment';
+      setSlipData({
+        paidByName: loggedInUser,
+        paidDate: new Date().toLocaleString(),
+        username: selectedUser.username,
+        name: selectedUser.name,
+        payableAmount,
+        currentBalance: newBalance,
+        paymentType: methodLabel
       });
-
-      // Refresh the user data to ensure the table updates correctly
-      await fetchUsers();
-    } catch (error) {
-      console.error("Error processing paid payment: ", error);
       notifications.show({
-        title: 'Paid Payment Failed',
-        message: "Error processing paid payment: " + (error instanceof Error ? error.message : "Unknown error"),
+        title: 'Payment recorded',
+        message: `Rs. ${paidPaymentAmount.toFixed(2)} for ${selectedUser.name}. Balance: Rs. ${newBalance.toFixed(2)}`,
+        color: 'green',
+        position: 'top-right',
+        autoClose: 3000
+      });
+      setTimeout(() => {
+        setSlipData(null);
+        fetchUsers();
+      }, 800);
+    } catch (error) {
+      notifications.show({
+        title: 'Payment failed',
+        message: (error instanceof Error ? error.message : 'Something went wrong. Try again.'),
         color: 'red',
         position: 'top-right'
       });
@@ -638,11 +671,10 @@ export default function UploadEntrySearchTable() {
 
       // Refresh the user data to ensure the table updates correctly
       await fetchUsers();
-    } catch (error) {
-      console.error("Error processing calculate payment: ", error);
+    } catch (err) {
       notifications.show({
         title: 'Calculate Payment Failed',
-        message: "Error processing calculate payment: " + (error instanceof Error ? error.message : "Unknown error"),
+        message: err instanceof Error ? err.message : 'Error processing payment. Try again.',
         color: 'red',
         position: 'top-right'
       });
@@ -731,11 +763,10 @@ export default function UploadEntrySearchTable() {
 
       // Refresh the user data to ensure the table updates correctly
       await fetchUsers();
-    } catch (error) {
-      console.error("Error processing make payment 2: ", error);
+    } catch (err) {
       notifications.show({
         title: 'Make Payment 2 Failed',
-        message: "Error processing make payment 2: " + (error instanceof Error ? error.message : "Unknown error"),
+        message: err instanceof Error ? err.message : 'Error processing payment. Try again.',
         color: 'red',
         position: 'top-right'
       });
@@ -849,11 +880,10 @@ export default function UploadEntrySearchTable() {
 
       // Refresh the user data to ensure the table updates correctly
       await fetchUsers();
-    } catch (error) {
-      console.error("Error processing payment: ", error);
+    } catch (err) {
       notifications.show({
         title: 'Payment Failed',
-        message: "Error processing payment: " + (error instanceof Error ? error.message : "Unknown error"),
+        message: err instanceof Error ? err.message : 'Error processing payment. Try again.',
         color: 'red',
         position: 'top-right'
       });
@@ -869,8 +899,58 @@ export default function UploadEntrySearchTable() {
     setSelectedUser(null);
   };
 
+  // Auto open print dialog when slip is ready
+  React.useEffect(() => {
+    if (slipData) {
+      const t = setTimeout(() => {
+        window.print();
+      }, 100);
+      return () => clearTimeout(t);
+    }
+  }, [slipData]);
+
+  const handleConfirmDelete = async () => {
+    if (!userToDelete) return;
+    try {
+      await deleteDoc(doc(db, 'uploadEntry', userToDelete.id));
+      setUsers(prev => prev.filter(u => u.id !== userToDelete.id));
+      setUserToDelete(null);
+      notifications.show({
+        title: 'User removed',
+        message: `${userToDelete.name} has been deleted.`,
+        color: 'green',
+        position: 'top-right'
+      });
+    } catch {
+      notifications.show({
+        title: 'Delete failed',
+        message: 'Could not delete user. Try again.',
+        color: 'red',
+        position: 'top-right'
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Payment slip - visible only when printing */}
+      {slipData && (
+        <div id="payment-slip-print" className="hidden print:block fixed inset-0 bg-white z-[9999] p-6" style={{ fontFamily: 'monospace' }}>
+          <div className="max-w-xs border-2 border-gray-800 p-4">
+            <div className="text-center text-sm font-bold border-b border-gray-400 pb-2 mb-2">PAYMENT SLIP</div>
+            <div className="text-xs space-y-1">
+              <div><span className="font-semibold">Payment Type:</span> {slipData.paymentType}</div>
+              <div><span className="font-semibold">Paid By:</span> {slipData.paidByName}</div>
+              <div><span className="font-semibold">Paid Date:</span> {slipData.paidDate}</div>
+              <div><span className="font-semibold">Username:</span> {slipData.username}</div>
+              <div><span className="font-semibold">Name:</span> {slipData.name}</div>
+              <div><span className="font-semibold">Payable Amount:</span> Rs. {slipData.payableAmount.toFixed(2)}</div>
+              <div><span className="font-semibold">Current Balance:</span> Rs. {slipData.currentBalance.toFixed(2)}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Paper radius="lg" withBorder className="p-6 bg-white border-gray-200 shadow-md">
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
           <div className="flex-grow">
@@ -938,7 +1018,7 @@ export default function UploadEntrySearchTable() {
         <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
           <div className="w-full flex-1 min-w-0">
             <div className="w-full flex flex-col md:flex-row md:items-center gap-2">
-              <Text className="text-xl font-bold text-gray-800 break-words">
+              <Text className="page-heading break-words">
                 User Search Results
               </Text>
               <Badge color="blue" variant="light" className="text-xs px-3 py-1 flex-shrink-0 mt-1 md:mt-0">
@@ -959,14 +1039,14 @@ export default function UploadEntrySearchTable() {
               <Table verticalSpacing="sm" horizontalSpacing="lg" className="min-w-full">
                 <Table.Thead className="bg-gray-50/50">
                   <Table.Tr>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[100px] sm:min-w-[120px]">User ID</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[100px] sm:min-w-[120px]">Name</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[100px] sm:min-w-[120px]">Address</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[80px] sm:min-w-[100px]">Package</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[80px] sm:min-w-[100px]">Start Date</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[80px] sm:min-w-[100px]">Total Payable Amount</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[60px] sm:min-w-[80px]">Status</Table.Th>
-                    <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[100px] sm:min-w-[120px]">Actions</Table.Th>
+                    <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[100px] sm:min-w-[120px]" style={{ fontSize: 'var(--text-sm)' }}>User ID</Table.Th>
+                    <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[100px] sm:min-w-[120px]" style={{ fontSize: 'var(--text-sm)' }}>Name</Table.Th>
+                    <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[100px] sm:min-w-[120px]" style={{ fontSize: 'var(--text-sm)' }}>Address</Table.Th>
+                    <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[80px] sm:min-w-[100px]" style={{ fontSize: 'var(--text-sm)' }}>Package</Table.Th>
+                    <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[80px] sm:min-w-[100px]" style={{ fontSize: 'var(--text-sm)' }}>Start Date</Table.Th>
+                    <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[80px] sm:min-w-[100px]" style={{ fontSize: 'var(--text-sm)' }}>Total Payable Amount</Table.Th>
+                    <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[60px] sm:min-w-[80px]" style={{ fontSize: 'var(--text-sm)' }}>Status</Table.Th>
+                    <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[100px] sm:min-w-[120px]" style={{ fontSize: 'var(--text-sm)' }}>Actions</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
@@ -1023,6 +1103,16 @@ export default function UploadEntrySearchTable() {
                               >
                                 Edit User
                               </Menu.Item>
+                              <Menu.Divider />
+                              <Menu.Label>Danger zone</Menu.Label>
+                              <Menu.Item
+                                color="red"
+                                leftSection={<IconTrash size={14} />}
+                                onClick={() => setUserToDelete(user)}
+                              >
+                                Delete User
+                              </Menu.Item>
+                              <Menu.Divider />
                               <Menu.Item
                                 leftSection={<IconCoin size={14} />}
                                 onClick={() => {
@@ -1031,34 +1121,6 @@ export default function UploadEntrySearchTable() {
                                 }}
                               >
                                 Paid Payment
-                              </Menu.Item>
-                              <Menu.Divider />
-                              <Menu.Label>Danger zone</Menu.Label>
-                              <Menu.Item
-                                color="red"
-                                leftSection={<IconTrash size={14} />}
-                                onClick={async () => {
-                                  if (window.confirm(`Are you sure you want to delete user ${user.name}?`)) {
-                                    try {
-                                      await deleteDoc(doc(db, 'uploadEntry', user.id));
-                                      setUsers(prev => prev.filter(u => u.id !== user.id));
-                                      notifications.show({
-                                        title: 'Success',
-                                        message: `User ${user.name} deleted successfully`,
-                                        color: 'green',
-                                      });
-                                    } catch (error) {
-                                      console.error("Error deleting document: ", error);
-                                      notifications.show({
-                                        title: 'Error',
-                                        message: "Failed to delete user",
-                                        color: 'red',
-                                      });
-                                    }
-                                  }
-                                }}
-                              >
-                                Delete User
                               </Menu.Item>
                             </Menu.Dropdown>
                           </Menu>
@@ -1141,6 +1203,16 @@ export default function UploadEntrySearchTable() {
                             >
                               Edit User
                             </Menu.Item>
+                            <Menu.Divider />
+                            <Menu.Label>Danger zone</Menu.Label>
+                            <Menu.Item
+                              color="red"
+                              leftSection={<IconTrash size={14} />}
+                              onClick={() => setUserToDelete(user)}
+                            >
+                              Delete User
+                            </Menu.Item>
+                            <Menu.Divider />
                             <Menu.Item
                               leftSection={<IconCoin size={14} />}
                               onClick={() => {
@@ -1149,34 +1221,6 @@ export default function UploadEntrySearchTable() {
                               }}
                             >
                               Paid Payment
-                            </Menu.Item>
-                            <Menu.Divider />
-                            <Menu.Label>Danger zone</Menu.Label>
-                            <Menu.Item
-                              color="red"
-                              leftSection={<IconTrash size={14} />}
-                              onClick={async () => {
-                                if (window.confirm(`Are you sure you want to delete user ${user.name}?`)) {
-                                  try {
-                                    await deleteDoc(doc(db, 'uploadEntry', user.id));
-                                    setUsers(prev => prev.filter(u => u.id !== user.id));
-                                    notifications.show({
-                                      title: 'Success',
-                                      message: `User ${user.name} deleted successfully`,
-                                      color: 'green',
-                                    });
-                                  } catch (error) {
-                                    console.error("Error deleting document: ", error);
-                                    notifications.show({
-                                      title: 'Error',
-                                      message: "Failed to delete user",
-                                      color: 'red',
-                                    });
-                                  }
-                                }
-                              }}
-                            >
-                              Delete User
                             </Menu.Item>
                           </Menu.Dropdown>
                         </Menu>
@@ -1705,6 +1749,25 @@ export default function UploadEntrySearchTable() {
               </Button>
             </Group>
           </div>
+        )}
+      </Modal>
+
+      {/* Delete confirmation modal */}
+      <Modal
+        opened={!!userToDelete}
+        onClose={() => setUserToDelete(null)}
+        title="Delete user"
+      >
+        {userToDelete && (
+          <>
+            <Text size="sm" className="text-gray-600 mb-4">
+              Are you sure you want to delete {userToDelete.name}? This cannot be undone.
+            </Text>
+            <Group justify="flex-end">
+              <Button variant="outline" color="gray" onClick={() => setUserToDelete(null)}>Cancel</Button>
+              <Button color="red" onClick={handleConfirmDelete}>Delete</Button>
+            </Group>
+          </>
         )}
       </Modal>
     </div>

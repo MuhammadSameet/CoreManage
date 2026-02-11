@@ -1,11 +1,5 @@
-import React from 'react';
-import { UserDashboardSection } from '@/components/dashboard/UserDashboardSection';
-const App = () => {
-  return (
-    <div className="space-y-10">
-      <UserDashboardSection />
-    </div>
-  );
-}
+import { redirect } from 'next/navigation';
 
-export default App;
+export default function Home() {
+  redirect('/404');
+}

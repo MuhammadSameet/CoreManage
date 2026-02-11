@@ -1,60 +1,48 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { useDispatch } from 'react-redux';
-import { fetchStatsData } from '@/redux/actions/stats-actions/stats-actions';
-import { StatsCard } from '@/components/dashboard/StatsCard';
-import { SimpleGrid } from '@mantine/core';
-import { useAppSelector, AppDispatch } from '@/redux/store';
+import { useSelector } from 'react-redux';
+import { RootState } from '@/redux/store';
+import { Loader } from '@mantine/core';
+import { useRouter } from 'next/navigation';
+import { UserDashboard } from '@/components/dashboard/UserDashboard';
+import { AdminDashboard } from '@/components/dashboard/AdminDashboard';
+import { EmployeeDashboard } from '@/components/dashboard/EmployeeDashboard';
 
+/**
+ * Role-based dashboard. Block /users for role:user (redirect to /users/detail).
+ */
 export default function UsersPage() {
-  const dispatch = useDispatch<AppDispatch>();
-  const { stats, loading } = useAppSelector((state: { stats: { stats: any; loading: boolean; error: string | null } }) => state.stats);
+  const router = useRouter();
+  const { isAuthenticated } = useSelector((state: RootState) => state.authStates);
+  const role = (isAuthenticated?.role as string) || 'user';
+  const roleLower = role.toLowerCase();
 
   useEffect(() => {
-    dispatch(fetchStatsData());
-  }, [dispatch]);
+    if (roleLower === 'user' && isAuthenticated?.uid) {
+      router.replace('/users/detail');
+    }
+  }, [roleLower, isAuthenticated?.uid, router]);
 
-  return (
-    <div className="space-y-6">
-      {/* Stats Cards Row */}
-      <div className="w-full">
-        <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="lg" className="mb-6">
-          <StatsCard
-            title="Payments Received"
-            value={`Rs. ${stats.paymentsReceived.toLocaleString()}`}
-            variant="blue"
-          />
-          <StatsCard
-            title="Current Balance"
-            value={`Rs. ${stats.currentBalance.toLocaleString()}`}
-            variant="blue"
-          />
-          <StatsCard
-            title="Total Payments"
-            value={`Rs. ${stats.totalPayments.toLocaleString()}`}
-            variant="blue"
-          />
-        </SimpleGrid>
-
-        <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="lg">
-          <StatsCard
-            title="Paid Users"
-            value={stats.paidUsers.toLocaleString()}
-            variant="green"
-          />
-          <StatsCard
-            title="Unpaid Users"
-            value={stats.unpaidUsers.toLocaleString()}
-            variant="orange"
-          />
-          <StatsCard
-            title="Total Users"
-            value={stats.totalUsers.toLocaleString()}
-            variant="blue"
-          />
-        </SimpleGrid>
+  if (!isAuthenticated?.uid) {
+    return (
+      <div className="flex justify-center items-center py-20">
+        <Loader size="lg" />
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (roleLower === 'user') {
+    return (
+      <div className="flex justify-center items-center py-20">
+        <Loader size="lg" />
+      </div>
+    );
+  }
+
+  if (roleLower === 'admin') {
+    return <AdminDashboard />;
+  }
+
+  return <EmployeeDashboard />;
 }

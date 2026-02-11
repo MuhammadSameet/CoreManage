@@ -1,134 +1,225 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Text as MantineText,
     Paper as MantinePaper,
-    Switch as MantineSwitch,
     Group as MantineGroup,
     Divider as MantineDivider,
     TextInput as MantineTextInput,
     Avatar,
     Button as MantineButton,
     Stack as MantineStack,
-    Select as MantineSelect
+    PasswordInput as MantinePasswordInput,
 } from '@mantine/core';
-import { IconBell, IconShieldLock, IconPalette, IconCloudUpload } from '@tabler/icons-react';
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState, AppDispatch } from '@/redux/store';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { reauthenticateWithCredential, EmailAuthProvider, updatePassword } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
+import { notifications } from '@mantine/notifications';
+import { CreationModals } from '@/components/dashboard/CreationModals';
 
 const Text = MantineText;
 const Group = MantineGroup;
 const TextInput = MantineTextInput;
 const Button = MantineButton;
 const Stack = MantineStack;
-const Select = MantineSelect;
 const Paper = MantinePaper;
-const Switch = MantineSwitch;
 const Divider = MantineDivider;
+const PasswordInput = MantinePasswordInput;
 
 export default function SettingsPage() {
+    const { isAuthenticated } = useSelector((state: RootState) => state.authStates);
+    const dispatch = useDispatch<AppDispatch>();
+    const [userInfo, setUserInfo] = useState<{ name: string; email: string; role: string; username: string; profileImageUrl: string | null }>({
+        name: '',
+        email: '',
+        role: 'user',
+        username: '',
+        profileImageUrl: null
+    });
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [changingPassword, setChangingPassword] = useState(false);
+    const [userModal, setUserModal] = useState<{ opened: boolean; type: 'user' | 'employee' }>({ opened: false, type: 'user' });
+
+    useEffect(() => {
+        const load = async () => {
+            if (!isAuthenticated?.uid) return;
+            try {
+                const userDocRef = doc(db, 'Users', isAuthenticated.uid);
+                const snap = await getDoc(userDocRef);
+                if (snap.exists()) {
+                    const d = snap.data();
+                    setUserInfo({
+                        name: d.name || d.Name || isAuthenticated.name || '',
+                        email: d.email || isAuthenticated.email || '',
+                        role: d.role || isAuthenticated.role || 'user',
+                        username: d.username || d.Username || '',
+                        profileImageUrl: d.profileImageUrl || d.photoURL || null
+                    });
+                } else {
+                    setUserInfo({
+                        name: isAuthenticated.name || '',
+                        email: isAuthenticated.email || '',
+                        role: (isAuthenticated.role as string) || 'user',
+                        username: (isAuthenticated.username as string) || '',
+                        profileImageUrl: null
+                    });
+                }
+            } catch {
+                setUserInfo(prev => ({
+                    ...prev,
+                    name: isAuthenticated?.name || '',
+                    email: isAuthenticated?.email || '',
+                    role: (isAuthenticated?.role as string) || 'user',
+                    username: (isAuthenticated?.username as string) || ''
+                }));
+            }
+        };
+        load();
+    }, [isAuthenticated?.uid, isAuthenticated?.email, isAuthenticated?.name, isAuthenticated?.role, isAuthenticated?.username]);
+
+    const roleLower = (userInfo.role || 'user').toLowerCase();
+    const canCreateUser = roleLower === 'admin' || roleLower === 'employee';
+
+    const handleChangePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (newPassword !== confirmPassword) {
+            notifications.show({ title: 'Error', message: 'New passwords do not match.', color: 'red', position: 'top-right' });
+            return;
+        }
+        if (newPassword.length < 6) {
+            notifications.show({ title: 'Error', message: 'Password must be at least 6 characters.', color: 'red', position: 'top-right' });
+            return;
+        }
+        const user = auth.currentUser;
+        if (!user?.email) {
+            notifications.show({ title: 'Error', message: 'You must be signed in to change password.', color: 'red', position: 'top-right' });
+            return;
+        }
+        setChangingPassword(true);
+        try {
+            const cred = EmailAuthProvider.credential(user.email, currentPassword);
+            await reauthenticateWithCredential(user, cred);
+            await updatePassword(user, newPassword);
+            setCurrentPassword('');
+            setNewPassword('');
+            setConfirmPassword('');
+            notifications.show({ title: 'Password updated', message: 'Your password has been changed.', color: 'green', position: 'top-right' });
+        } catch (err: unknown) {
+            const msg = (err as Error)?.message || '';
+            if (msg.includes('wrong-password') || msg.includes('invalid-credential')) {
+                notifications.show({ title: 'Error', message: 'Current password is incorrect.', color: 'red', position: 'top-right' });
+            } else {
+                notifications.show({ title: 'Error', message: 'Could not update password. Try again.', color: 'red', position: 'top-right' });
+            }
+        } finally {
+            setChangingPassword(false);
+        }
+    };
+
+    const initials = userInfo.name.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().substring(0, 2) || 'U';
+
     return (
-        <div className="max-w-4xl space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-700">
+        <div className="max-w-4xl space-y-8">
             <div>
-                <Text className="text-2xl font-bold text-gray-800">System Settings</Text>
-                <Text className="text-gray-400 text-sm">Manage your account preferences and system configurations.</Text>
+                <Text className="font-bold text-gray-800 mb-1" style={{ fontSize: 'var(--text-2xl)' }}>Settings</Text>
+                <Text className="text-gray-500" style={{ fontSize: 'var(--text-base)' }}>Your account information and password.</Text>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Profile Section */}
-                <div className="lg:col-span-2 space-y-6">
-                    <Paper p="xl" radius="md" withBorder className="border-gray-100 shadow-sm">
-                        <Group mb="xl" gap="xl">
-                            <Avatar size={80} radius={80} color="blue" src={null}>JD</Avatar>
-                            <div>
-                                <Text fw={700} size="lg">John Doe</Text>
-                                <Text size="sm" className="text-gray-400 mb-3">Administrator</Text>
-                                <Button size="compact-xs" variant="light" leftSection={<IconCloudUpload size={14} />}>Change Photo</Button>
-                            </div>
+            <Paper p="xl" radius="md" withBorder className="border-gray-100 shadow-sm">
+                <Group mb="xl" gap="xl" wrap="wrap">
+                    <Avatar
+                        size={80}
+                        radius="xl"
+                        color="blue"
+                        src={userInfo.profileImageUrl || undefined}
+                    >
+                        {initials || 'U'}
+                    </Avatar>
+                    <div>
+                        <Text fw={700} style={{ fontSize: 'var(--text-lg)' }}>{userInfo.name || '—'}</Text>
+                        <Text className="text-gray-500 capitalize" style={{ fontSize: 'var(--text-sm)' }}>{userInfo.role || 'user'}</Text>
+                    </div>
+                </Group>
+
+                <Divider mb="xl" />
+
+                <Stack gap="md">
+                    <TextInput label="Email" value={userInfo.email} readOnly radius="md" size="md" />
+                    <TextInput label="Role" value={userInfo.role} readOnly radius="md" size="md" />
+                    <TextInput label="Name" value={userInfo.name} readOnly radius="md" size="md" />
+                    <TextInput label="Username" value={userInfo.username} readOnly radius="md" size="md" />
+                </Stack>
+
+                <Divider my="xl" />
+
+                <Text fw={700} className="text-gray-800 mb-3" style={{ fontSize: 'var(--text-base)' }}>Change password</Text>
+                <form onSubmit={handleChangePassword}>
+                    <Stack gap="sm">
+                        <PasswordInput
+                            label="Current password"
+                            placeholder="Enter current password"
+                            value={currentPassword}
+                            onChange={(e) => setCurrentPassword(e.target.value)}
+                            radius="md"
+                        />
+                        <PasswordInput
+                            label="New password"
+                            placeholder="Enter new password"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            radius="md"
+                        />
+                        <PasswordInput
+                            label="Confirm new password"
+                            placeholder="Confirm new password"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            radius="md"
+                        />
+                        <Button type="submit" className="bg-[#6366f1] hover:bg-[#4f46e5] font-semibold" radius="md" size="md" loading={changingPassword}>
+                            Update password
+                        </Button>
+                    </Stack>
+                </form>
+
+                {canCreateUser && (
+                    <>
+                        <Divider my="xl" />
+                        <Group gap="sm">
+                            <Button
+                                variant="light"
+                                className="bg-[#6366f1]/10 text-[#6366f1] hover:bg-[#6366f1]/20 font-semibold"
+                                radius="md"
+                                size="md"
+                                onClick={() => setUserModal({ opened: true, type: 'user' })}
+                            >
+                                Create User
+                            </Button>
+                            <Button
+                                variant="light"
+                                className="bg-[#6366f1]/10 text-[#6366f1] hover:bg-[#6366f1]/20 font-semibold"
+                                radius="md"
+                                size="md"
+                                onClick={() => setUserModal({ opened: true, type: 'employee' })}
+                            >
+                                Create Employee
+                            </Button>
                         </Group>
+                    </>
+                )}
+            </Paper>
 
-                        <Divider mb="xl" label="Profile Details" labelPosition="center" />
-
-                        <Stack gap="md">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <TextInput label="First Name" defaultValue="John" radius="md" />
-                                <TextInput label="Last Name" defaultValue="Doe" radius="md" />
-                            </div>
-                            <TextInput label="Email Address" defaultValue="john.doe@coremanage.com" readOnly radius="md" />
-                            <TextInput label="Job Title" defaultValue="System Administrator" radius="md" />
-                            <div className="flex justify-end mt-4">
-                                <Button className="bg-[#1e40af] hover:bg-blue-800" radius="md">Save Changes</Button>
-                            </div>
-                        </Stack>
-                    </Paper>
-
-                    <Paper p="xl" radius="md" withBorder className="border-gray-100 shadow-sm">
-                        <Group mb="md">
-                            <IconShieldLock size={20} className="text-blue-600" />
-                            <Text fw={700}>Security & Privacy</Text>
-                        </Group>
-                        <Stack gap="md">
-                            <Group justify="space-between">
-                                <div>
-                                    <Text size="sm" fw={600}>Two-Factor Authentication</Text>
-                                    <Text size="xs" className="text-gray-400">Add an extra layer of security to your account.</Text>
-                                </div>
-                                <Switch defaultChecked />
-                            </Group>
-                            <Divider variant="dashed" />
-                            <Group justify="space-between">
-                                <div>
-                                    <Text size="sm" fw={600}>Login Alerts</Text>
-                                    <Text size="xs" className="text-gray-400">Receive an email whenever someone logs into your account.</Text>
-                                </div>
-                                <Switch />
-                            </Group>
-                        </Stack>
-                    </Paper>
-                </div>
-
-                {/* Sidebar Settings (Appearance & Notifications) */}
-                <div className="space-y-6">
-                    <Paper p="xl" radius="md" withBorder className="border-gray-100 shadow-sm">
-                        <Group mb="md">
-                            <IconPalette size={20} className="text-blue-600" />
-                            <Text fw={700}>Appearance</Text>
-                        </Group>
-                        <Stack gap="md">
-                            <Select
-                                label="Theme Mode"
-                                data={['Light Mode', 'Dark Mode', 'System Default']}
-                                defaultValue="Light Mode"
-                            />
-                            <Select
-                                label="Accent Color"
-                                data={['Core Blue', 'Forest Green', 'Sunset Orange', 'Deep Purple']}
-                                defaultValue="Core Blue"
-                            />
-                        </Stack>
-                    </Paper>
-
-                    <Paper p="xl" radius="md" withBorder className="border-gray-100 shadow-sm">
-                        <Group mb="md">
-                            <IconBell size={20} className="text-blue-600" />
-                            <Text fw={700}>Notifications</Text>
-                        </Group>
-                        <Stack gap="md">
-                            <Group justify="space-between">
-                                <Text size="sm">Email Alerts</Text>
-                                <Switch defaultChecked />
-                            </Group>
-                            <Group justify="space-between">
-                                <Text size="sm">Desktop Popups</Text>
-                                <Switch defaultChecked />
-                            </Group>
-                            <Group justify="space-between">
-                                <Text size="sm">Weekly Reports</Text>
-                                <Switch />
-                            </Group>
-                        </Stack>
-                    </Paper>
-                </div>
-            </div>
+            <CreationModals
+                opened={userModal.opened}
+                onClose={() => setUserModal(prev => ({ ...prev, opened: false }))}
+                type={userModal.type}
+            />
         </div>
     );
 }

@@ -2,19 +2,36 @@
 
 const publicRoutes: string[] = [
     '/login',
-    '/signup'
+    '/signup',
+    '/404'
 ];
 
 const privateRoutes: string[] = [
-    '/home',
     '/about',
     '/users',
     '/users/roles',
     '/users/profile',
-    '/users/activity'
+    '/users/activity',
+    '/users/search',
+    '/users/detail',
+    '/users/collections',
+    '/users/report',
+    '/users/uploadentry',
+    '/settings'
+];
+
+// Routes that are BLOCKED for ALL roles (admin, employee, user) - redirect to 404
+const blockedRoutes: string[] = [
+    '/',
+    '/payments',
+    '/attendance',
+    '/leave-management',
+    '/employees',
+    '/home'
 ];
 
 export {
     publicRoutes,
-    privateRoutes
+    privateRoutes,
+    blockedRoutes
 };

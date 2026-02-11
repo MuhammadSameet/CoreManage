@@ -9,8 +9,7 @@ import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 export function AppShell({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
 
-    // Logic to exclude shell on Auth pages
-    const isAuthPage = ['/login', '/signup', '/forgot-password'].includes(pathname);
+    const isAuthPage = ['/login', '/signup', '/forgot-password', '/404'].includes(pathname);
 
     // State for Sidebar
     // Default open on desktop, closed on mobile
@@ -43,13 +42,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 closeMobile={closeMobile}
             />
 
-            <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${mainContentMargin}`}>
+            <div className={`flex-1 flex flex-col min-h-screen min-w-0 overflow-x-hidden transition-all duration-300 ${mainContentMargin}`}>
                 <Header
                     opened={isMobile ? mobileOpened : opened}
                     toggle={isMobile ? toggleMobile : toggle}
                 />
 
-                <main className="p-4 md:p-8 flex-1">
+                <main className="p-4 md:p-8 flex-1 min-w-0 overflow-x-hidden">
                     {children}
                 </main>
             </div>

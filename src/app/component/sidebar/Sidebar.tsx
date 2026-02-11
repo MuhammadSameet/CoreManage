@@ -268,9 +268,6 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
                   <ListItemButton component={Link} href="/payments" sx={subItemStyle(isPathActive('/payments'))}>
                     <ListItemText primary="Billing Logs" />
                   </ListItemButton>
-                  <ListItemButton component={Link} href="/stats-demo" sx={subItemStyle(isPathActive('/stats-demo'))}>
-                    <ListItemText primary="Market Stats" />
-                  </ListItemButton>
                 </List>
               </Collapse>
             </ListItem>

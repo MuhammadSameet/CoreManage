@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { ColorSchemeScript } from '@mantine/core';
 import '@mantine/core/styles.css';
+import '@mantine/charts/styles.css';
 import 'react-toastify/dist/ReactToastify.css';
 import './globals.css';
 import Providers from './Providers';

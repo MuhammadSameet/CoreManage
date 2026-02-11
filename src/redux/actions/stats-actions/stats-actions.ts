@@ -95,8 +95,7 @@ export const fetchStatsData = createAsyncThunk(
         unpaidUsers: totalUsers, // This is the count of ALL users from uploadEntry (as requested)
         totalUsers
       };
-    } catch (error) {
-      console.error('Error fetching stats data:', error);
+    } catch {
       return rejectWithValue('Failed to fetch stats data');
     }
   }

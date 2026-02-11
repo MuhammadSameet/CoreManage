@@ -5,6 +5,8 @@ import store from "@/redux/store";
 import { useEffect } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { setCookie } from "cookies-next";
 import { MantineProvider, MantineThemeOverride } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
@@ -27,10 +29,27 @@ function AuthInit({ children }: { children: React.ReactNode }) {
                 const fbToken = await user.getIdToken();
                 setCookie('token', fbToken);
 
+                let role = 'user';
+                let username = '';
+                let name = user.displayName || null;
+                try {
+                    const userDoc = await getDoc(doc(db, 'Users', user.uid));
+                    if (userDoc.exists()) {
+                        const d = userDoc.data();
+                        role = d.role || 'user';
+                        username = d.username || d.Username || '';
+                        name = d.name || d.Name || user.displayName || null;
+                    }
+                } catch {
+                    // keep defaults
+                }
+
                 dispatch(LOGIN_USER({
-                    email: user.email,
+                    email: user.email ?? null,
                     uid: user.uid,
-                    name: user.displayName
+                    name,
+                    role,
+                    username
                 }));
             } else {
                 dispatch(LOG_OUT_USER());

@@ -1,16 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, orderBy, doc, getDoc } from 'firebase/firestore';
+import { useRouter } from 'next/navigation';
+import { collection, query, getDocs, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/redux/store';
-import { Table, Text, Loader, Badge, Group, Button, TextInput, Select, Stack, Paper, LoadingOverlay } from '@mantine/core';
-import { IconSearch, IconCalendar, IconUser, IconCash, IconCreditCard, IconX } from '@tabler/icons-react';
-import { DatePickerInput } from '@mantine/dates';
-import dayjs from 'dayjs';
-
-// Import StatsCard component
+import { Table, Text, Loader, Badge, Paper, LoadingOverlay, Select } from '@mantine/core';
 import { StatsCard } from '@/components/dashboard/StatsCard';
 
 // Define the data type to match users/report page
@@ -37,25 +33,25 @@ const UserDetailPage = () => {
   const [dataTypes, setDataTypes] = useState<string[]>(['all']);
   const [currentUsername, setCurrentUsername] = useState<string>('');
 
+  const router = useRouter();
   const { isAuthenticated } = useSelector((state: RootState) => state.authStates);
+  const role = (isAuthenticated as { role?: string })?.role?.toLowerCase() || 'user';
 
-  // Fetch user's data from Firebase - filter by logged-in username
   useEffect(() => {
+    if (role === 'admin' || role === 'employee') {
+      router.replace('/users/collections');
+    }
+  }, [role, router]);
+
+  // Fetch user's own data only (role: user). Do not run for admin/employee (they are redirected).
+  useEffect(() => {
+    if (role !== 'user') return;
+
     const fetchData = async () => {
-      // Check if user is authenticated first
       if (!isAuthenticated) {
-        console.log("User not authenticated");
         setLoading(false);
         return;
       }
-
-      console.log("DEBUG AUTH START");
-      console.log("isAuthenticated:", isAuthenticated);
-      console.log("Type of isAuthenticated:", typeof isAuthenticated);
-      console.log("Keys:", Object.keys(isAuthenticated));
-      console.log("Username (lowercase):", (isAuthenticated as any).username);
-      console.log("Username (uppercase):", (isAuthenticated as any).Username);
-      console.log("DEBUG AUTH END");
 
       setLoading(true);
 
@@ -73,17 +69,15 @@ const UserDetailPage = () => {
               const userData = userDocSnap.data();
               loggedInUsername = userData.username || userData.Username || userData.name || userData.Name;
             }
-          } catch (error) {
-            console.error("Error fetching user profile:", error);
+          } catch {
+            // fallback handled below
           }
         }
 
         setCurrentUsername(loggedInUsername || '');
 
         if (!loggedInUsername && !loggedInUid) {
-          console.warn("User is authenticated but both Username and UID are missing:", isAuthenticated);
-          // Username not available in isAuthenticated object
-          // Don't return - let's show all data if username is not available
+          // Show no data if we cannot identify user
         }
 
         const paymentsQuery = query(collection(db, 'payments'), orderBy('date', 'desc'));
@@ -131,21 +125,16 @@ const UserDetailPage = () => {
                 const userData = userDocSnap.data();
                 username = userData.username || userData.Username || userData.name || userData.Name || data.userId;
               }
-            } catch (err) {
-              console.error('Error fetching user data:', err);
-              username = data.userId; // Fallback to userId if user data fetch fails
+            } catch {
+              username = data.userId;
             }
           }
 
-          // Robust Filtering: Check Username Match OR UID Match
-          // Request: "userId use nhi krna sirf username use kro"
-          // We check both the linked username (from uploadEntry) and the record's userName string
-          const isUsernameMatch = loggedInUsername && (
-            (username.toLowerCase() === loggedInUsername.toLowerCase()) ||
-            (data.userName && typeof data.userName === 'string' && data.userName.toLowerCase() === loggedInUsername.toLowerCase())
-          );
-
-          const shouldInclude = isUsernameMatch;
+        const isUsernameMatch = loggedInUsername && (
+          (username.toLowerCase() === loggedInUsername.toLowerCase()) ||
+          (data.userName && typeof data.userName === 'string' && data.userName.toLowerCase() === loggedInUsername.toLowerCase())
+        );
+        const shouldInclude = isUsernameMatch;
 
           if (!shouldInclude) {
             // console.log(`Payment Mismatch: Record username '${username}' !== LoggedIn '${loggedInUsername}'`);
@@ -209,12 +198,7 @@ const UserDetailPage = () => {
           // Get user information
           const userUsername = data.Username || data.username || data.name || data.Name || 'N/A';
 
-          // Robust Filtering: Check Username Match OR UID Match
-          // Request: "userId use nhi krna sirf username use kro"
-          const isUsernameMatch = loggedInUsername && (
-            (userUsername.toLowerCase() === loggedInUsername.toLowerCase())
-          );
-
+          const isUsernameMatch = loggedInUsername && (userUsername.toLowerCase() === loggedInUsername.toLowerCase());
           const shouldInclude = isUsernameMatch;
 
           if (!shouldInclude) {
@@ -261,15 +245,15 @@ const UserDetailPage = () => {
 
         // console.log("Combined records:", allRecords.length);
         setPaymentRecords(allRecords);
-      } catch (error) {
-        console.error('Error fetching user data:', error);
+      } catch {
+        setPaymentRecords([]);
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [isAuthenticated]); // Re-fetch when authentication state changes
+  }, [isAuthenticated, role]);
 
   // Apply filters
   const filteredRecords = paymentRecords.filter(record => {
@@ -341,6 +325,14 @@ const UserDetailPage = () => {
     const num = typeof amount === 'string' ? parseFloat(amount) : amount;
     return isNaN(num) ? '0' : `Rs. ${num.toFixed(2)}`;
   };
+
+  if (role === 'admin' || role === 'employee') {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader size="xl" />
+      </div>
+    );
+  }
 
   if (loading) {
     return (

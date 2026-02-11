@@ -1,22 +1,22 @@
 // (Only run on Next JS Server)
 
 import { NextResponse, NextRequest } from "next/server";
-import { publicRoutes } from "./utils/routes";
+import { publicRoutes, blockedRoutes } from "./utils/routes";
 
 function middleware(req: NextRequest) {
-
     const token = req?.cookies?.get('token')?.value || null;
-    // console.log(`Token: ${token}`);
-
     const { pathname } = req.nextUrl;
-    // console.log('Path: ', pathname);
+
+    // Blocked routes: ALL roles get redirected to 404 (no one can access)
+    if (blockedRoutes.includes(pathname)) {
+        return NextResponse.redirect(new URL('/404', req.url));
+    }
 
     const isPublic = publicRoutes.includes(pathname);
     const isProtected = !isPublic;
-    // console.log('Is Protected: ', isProtected);
 
     if (token && isPublic) {
-        return NextResponse.redirect(new URL('/home', req.url));
+        return NextResponse.redirect(new URL('/users', req.url));
     }
 
     if (!token && isProtected) {

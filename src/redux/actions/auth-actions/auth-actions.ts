@@ -17,55 +17,39 @@ interface UserData {
 
 import { fetchAllUsers } from "../user-actions/user-actions";
 
-// Note: Sign up user...!
+// User-friendly auth error messages (no "firebase" or technical terms)
+function getSignUpErrorMessage(err: unknown): string {
+  const msg = (err as Error)?.message || '';
+  if (msg.includes('auth/email-already-in-use')) return 'Email already exists. Use a different email.';
+  if (msg.includes('auth/invalid-email')) return 'Invalid email address.';
+  if (msg.includes('auth/weak-password')) return 'Password is too weak. Use at least 6 characters.';
+  if (msg.includes('auth/operation-not-allowed')) return 'Sign up is not allowed. Contact support.';
+  return 'Could not create account. Please try again.';
+}
+
+// Note: Sign up user - ONLY in Users collection (do NOT create in uploadEntry or any other collection)
 const signUpUser = (userData: UserData) => {
   return async (dispatch: AppDispatch) => {
-    console.log("User: ", userData);
-
     try {
       const createUser = await createUserWithEmailAndPassword(
         auth,
         userData?.email,
         userData?.password
       );
-      console.log(createUser);
 
-      // Create user document in both Users collection and uploadEntry collection
       const saveUserData = {
         name: userData.name,
         email: userData.email,
-        password: userData.password, // Saved as requested for educational/competition purposes
+        password: userData.password,
         uid: createUser?.user?.uid,
-        role: userData.role || 'User',
+        role: userData.role || 'user',
         username: userData.username || userData.name?.split(' ')[0]?.toLowerCase() || userData.email?.split('@')[0],
         createdAt: new Date().toISOString()
-      }
+      };
 
       if (createUser) {
-        // Note: Saving data in Users collection with UID as Document ID...!
         await setDoc(doc(db, "Users", createUser.user.uid), saveUserData);
-        console.log("Saved data in Users collection for UID: ", createUser.user.uid);
 
-        // Note: Also saving data in uploadEntry collection for billing system compatibility
-        await setDoc(doc(db, "uploadEntry", createUser.user.uid), {
-          'User ID': createUser.user.uid, // Use UID as User ID to match with auth state
-          Username: saveUserData.username,
-          username: saveUserData.username, // Also save lowercase username for consistency
-          userId: createUser.user.uid, // Save UID in userId field as well
-          Package: 'Basic',
-          Amount: '0',
-          Address: 'N/A',
-          Password: userData.password,
-          MonthlyFee: '0',
-          Balance: '0',
-          Profit: '0',
-          isPaid: 'unpaid',
-          Date: new Date().toISOString().split('T')[0],
-          uploadedAt: new Date()
-        });
-        console.log("Saved data in uploadEntry collection for UID: ", createUser.user.uid);
-
-        // Note: Auto-login logic...!
         const userToken = await createUser.user.getIdToken();
         if (userToken) {
           setCookie('token', userToken);
@@ -73,45 +57,43 @@ const signUpUser = (userData: UserData) => {
             email: createUser.user.email,
             uid: createUser.user.uid,
             name: userData.name || null,
-            role: userData.role || 'User',
+            role: userData.role || 'user',
             username: saveUserData.username
           }));
         }
 
-        // Note: Refreshing user list to sync UI
         await dispatch(fetchAllUsers());
-
-        // Redirect or refresh
-        window.location.href = '/login'; // Or dashboard if preferred, but following current auth flow
+        window.location.href = '/login';
       }
     } catch (error: unknown) {
-      console.log("Something went wrong while creating user: ", (error as Error).message);
-      // Check if it's the specific email already in use error
-      if ((error as Error).message.includes('auth/email-already-in-use')) {
-        throw new Error('Email is already in use. Please use a different email address.');
-      }
-      throw error; // Rethrow to allow component to catch
+      throw new Error(getSignUpErrorMessage(error));
     }
   };
 };
 
-// Note: Log in user...!
+// User-friendly login error messages
+function getLoginErrorMessage(err: unknown): string {
+  const msg = (err as Error)?.message || '';
+  if (msg.includes('auth/user-not-found')) return 'User not found.';
+  if (msg.includes('auth/wrong-password') || msg.includes('auth/invalid-credential')) return 'Incorrect password.';
+  if (msg.includes('auth/invalid-email')) return 'Invalid email address.';
+  if (msg.includes('auth/too-many-requests')) return 'Too many attempts. Try again later.';
+  if (msg.includes('auth/user-disabled')) return 'This account has been disabled.';
+  return 'Invalid email or password. Please try again.';
+}
+
+// Note: Log in user
 const logInUser = (userData: UserData) => {
   return async (dispatch: AppDispatch) => {
-    console.log("User: ", userData);
-
     try {
       const res = await signInWithEmailAndPassword(
         auth,
         userData?.email,
         userData?.password
       );
-      console.log('Login response: ', res);
 
-      // Get user data from Firestore to include role and other details
       const userDocRef = doc(db, "Users", res.user.uid);
       const userDocSnap = await getDoc(userDocRef);
-      
       let userDataFromDB: Record<string, any> = {};
       if (userDocSnap.exists()) {
         userDataFromDB = userDocSnap.data();
@@ -128,21 +110,14 @@ const logInUser = (userData: UserData) => {
 
       const userToken = await res?.user?.getIdToken();
       if (userToken) {
-        // Saving token...!
         setCookie('token', userToken);
-
-        // Saving auth user in redux...!
         dispatch(LOGIN_USER(saveUser));
-
         window.location.reload();
       }
-      
-      return Promise.resolve(res); // Return success for error handling in component
-    }
 
-    catch (error: unknown) {
-      console.log("Something went wrong while login user: ", (error as Error).message);
-      throw error; // Throw error so component can handle it
+      return Promise.resolve(res);
+    } catch (error: unknown) {
+      throw new Error(getLoginErrorMessage(error));
     }
   };
 };
@@ -160,10 +135,9 @@ const logOutUser = () => {
       // Removing user cookies...!
       deleteCookie('token');
 
-      // Navigate to home/landing instead of alert/reload
-      window.location.href = '/';
-    } catch (error: unknown) {
-      console.log("Error logging out: ", (error as Error).message);
+      window.location.href = '/login';
+    } catch {
+      // continue to redirect
     }
   }
 }

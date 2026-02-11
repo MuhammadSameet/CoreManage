@@ -15,7 +15,7 @@ import { IconFileSpreadsheet, IconEye, IconUpload, IconCheck, IconClock, IconX }
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { createUserOrUpdateData } from '@/services/userDataService';
 import { createMonthlyDataForUser } from '@/utils/monthlyDataUtils';
@@ -71,7 +71,6 @@ export function NewUploadEntryClient() {
                     transformHeader: (header) => header.trim()
                 });
                 data = parsed.data as DataRow[];
-                console.log('CSV parsed data:', data);
             }
             // Excel parse
             else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
@@ -82,27 +81,23 @@ export function NewUploadEntryClient() {
 
                 // Get the range of the worksheet
                 const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-                console.log('Excel sheet range:', range);
 
                 // Convert entire sheet to array of arrays first
                 const rawArray: (string | number | boolean | null | undefined)[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-                console.log('Excel raw array:', rawArray);
 
                 // Find the header row (first row with multiple non-empty values)
                 let headerRowIndex = 0;
                 for (let i = 0; i < Math.min(5, rawArray.length); i++) {
                     const row = rawArray[i];
                     const nonEmptyCount = row.filter((cell) => cell !== '' && cell !== null && cell !== undefined).length;
-                    if (nonEmptyCount >= 3) { // At least 3 columns with data
+                    if (nonEmptyCount >= 3) {
                         headerRowIndex = i;
-                        console.log('Found header row at index:', i, 'Row:', row);
                         break;
                     }
                 }
 
                 // Extract headers and data
                 const headers = rawArray[headerRowIndex].map((h) => String(h).trim()).filter((h: string) => h !== '');
-                console.log('Headers:', headers);
 
                 // Convert data rows to objects
                 data = [];
@@ -124,18 +119,10 @@ export function NewUploadEntryClient() {
                     }
                 }
 
-                console.log('Excel processed data:', data);
             } else {
                 toast.warning('Only CSV or Excel files are supported');
                 setLoading(false);
                 return;
-            }
-
-            console.log('Final parsed data:', data);
-            console.log('Total records:', data.length);
-            if (data.length > 0) {
-                console.log('First record:', data[0]);
-                console.log('Column names:', Object.keys(data[0]));
             }
 
             if (data.length === 0) {
@@ -147,15 +134,14 @@ export function NewUploadEntryClient() {
             setParsedData(data);
             setShowPreview(true);
             toast.success(`Preview loaded! ${data.length} records found.`);
-        } catch (err) {
-            console.error('Error parsing file:', err);
+        } catch {
             toast.error('Failed to parse file. Please check the file format.');
         }
 
         setLoading(false);
     };
 
-    // Submit button handler - Save data to Firebase using new structure
+    // Submit: if username exists in Data collection, update only date; else save as current behavior
     const handleSubmit = async () => {
         if (parsedData.length === 0) {
             toast.error('No data to upload. Please preview the file first!');
@@ -163,43 +149,47 @@ export function NewUploadEntryClient() {
         }
 
         setLoading(true);
-        toast.info('Uploading data to Firebase with new structure...');
+        toast.info('Uploading...');
 
         try {
-            // Process each row using the new data structure
             const uploadPromises = parsedData.map(async (row) => {
-                // Process the row with the new user data structure
-                await createUserOrUpdateData(row);
+                const username = String(row['Username'] ?? row['username'] ?? row['User ID'] ?? row['id'] ?? '').trim();
+                const csvDate = row['Date'] ?? row['date'] ?? new Date().toISOString().split('T')[0];
 
-                // Also add to the legacy uploadEntry collection for compatibility with existing features
-                const { paid, isPaid, status, Price, price, Profit, profit, Total, total, ...cleanRow } = row; // Remove unwanted fields
+                const dataDocRef = doc(db, 'Data', username);
+                const dataSnap = await getDoc(dataDocRef);
+
+                if (dataSnap.exists()) {
+                    await updateDoc(dataDocRef, { Date: csvDate });
+                    return;
+                }
+
+                await createUserOrUpdateData(row);
+                const { paid, isPaid, status, Price, price, Profit, profit, Total, total, ...cleanRow } = row;
                 const dataToUpload = {
                     ...cleanRow,
-                    Price: 0, // Default value for Price
-                    Profit: 0, // Default value for Profit
-                    Total: 0, // Default value for Total
-                    isPaid: false, // Default to unpaid
-                    address: 'pakistan', // Add address field with default value
+                    Price: 0,
+                    Profit: 0,
+                    Total: 0,
+                    isPaid: false,
+                    address: (row['Address'] ?? row['address'] ?? 'pakistan') as string,
                     uploadedAt: serverTimestamp(),
                 };
 
-                // Add to uploadEntry collection
                 const docRef = await addDoc(collection(db, 'uploadEntry'), dataToUpload);
-
-                // Create corresponding monthly data entry
                 await createMonthlyDataForUser(docRef.id, dataToUpload);
+
+                await setDoc(doc(db, 'Data', username), { ...cleanRow, Date: csvDate });
             });
 
             await Promise.all(uploadPromises);
-            toast.success(`Successfully uploaded ${parsedData.length} records to Firebase with new structure! 🎉`);
+            toast.success(`Uploaded ${parsedData.length} records.`);
 
-            // Reset state
             setFile(null);
             setParsedData([]);
             setShowPreview(false);
         } catch (err) {
-            console.error('Error uploading to Firebase:', err);
-            toast.error('Failed to upload data to Firebase. Please try again.');
+            toast.error('Upload failed. Please try again.');
         }
 
         setLoading(false);
@@ -222,15 +212,15 @@ export function NewUploadEntryClient() {
     };
 
     return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
-            {/* Header */}
-            <div className="flex justify-between items-center">
-                <Text className="text-2xl font-bold text-gray-800">Upload Entry (New Structure)</Text>
+        <div className="space-y-8">
+            <div>
+                <Text className="page-heading">Upload Entry</Text>
+                <Text className="page-description mt-1">Select a CSV or Excel file to import user entries.</Text>
             </div>
 
             {/* File Upload Section */}
             <Paper radius="md" withBorder className="p-6 border-gray-200 shadow-sm">
-                <Text className="text-lg font-bold text-gray-800 mb-4">Select File to Upload</Text>
+                <Text className="mb-4 font-semibold text-gray-800" style={{ fontSize: 'var(--text-lg)' }}>Select File to Upload</Text>
 
                 <Flex
                     gap="md"
@@ -245,14 +235,14 @@ export function NewUploadEntryClient() {
                                 setShowPreview(false);
                                 setParsedData([]);
                             }}
-                            placeholder="Upload CSV / Excel file"
-                            leftSection={<IconFileSpreadsheet size={16} />}
+                            placeholder="Upload CSV or Excel file"
+                            leftSection={<IconFileSpreadsheet size={18} />}
                             accept=".csv,.xlsx,.xls"
                             radius="md"
                             size="md"
                             classNames={{
                                 root: 'w-full',
-                                input: 'h-[46px] border-[#1e40af]',
+                                input: 'min-h-[2.75rem] border-[#1e40af]',
                             }}
                         />
                     </div>

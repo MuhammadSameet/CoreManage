@@ -21,7 +21,6 @@ const authSlice = createSlice({
   initialState: initialState,
   reducers: {
     LOGIN_USER: (state, action: PayloadAction<UserPayload>) => {
-      console.log("User in redux: ", action.payload);
       state.isAuthenticated = action.payload;
     },
 

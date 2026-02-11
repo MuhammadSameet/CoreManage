@@ -343,6 +343,7 @@ import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { notifications } from '@mantine/notifications';
 
 type DataRow = Record<string, string | number | boolean | null | undefined>;
 
@@ -373,7 +374,7 @@ export default function FileUploadRow({
       const worksheet = workbook.Sheets[sheetName];
       data = XLSX.utils.sheet_to_json<DataRow>(worksheet);
     } else {
-      alert('Only CSV or Excel files are supported');
+      notifications.show({ title: 'Invalid file', message: 'Only CSV or Excel files are supported.', color: 'orange', position: 'top-right' });
       setLoading(false);
       return;
     }
@@ -388,14 +389,13 @@ export default function FileUploadRow({
       );
 
       await Promise.all(batchPromises);
-      alert('Data uploaded successfully!');
+      notifications.show({ title: 'Upload complete', message: 'Data uploaded successfully.', color: 'green', position: 'top-right' });
       setFile(null);
 
       // Send uploaded data to parent for preview table
       onDataUploaded(data);
-    } catch (err: unknown) {
-      console.error(err);
-      alert('Failed to upload data');
+    } catch {
+      notifications.show({ title: 'Upload failed', message: 'Failed to upload data. Try again.', color: 'red', position: 'top-right' });
     }
 
     setLoading(false);

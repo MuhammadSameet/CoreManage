@@ -5,15 +5,15 @@ import { Text, Tooltip, ScrollArea as MantineScrollArea, UnstyledButton, Group a
 import {
     IconLayoutDashboard,
     IconUsers,
-    IconUserShield,
-    IconWallet,
     IconChevronLeft,
     IconChevronDown,
-    IconMenu2
+    IconMenu2,
+    IconSettings
 } from '@tabler/icons-react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useSelector } from 'react-redux';
+import { RootState } from '@/redux/store';
 
-// Fix for React 19 type incompatibility
 const Group = MantineGroup;
 const Collapse = MantineCollapse;
 const ScrollArea = MantineScrollArea;
@@ -33,59 +33,43 @@ interface NavItem {
     links?: { label: string; link: string }[];
 }
 
-const mockData: NavItem[] = [
-    { label: 'Dashboard', icon: IconLayoutDashboard, link: '/' },
-    {
-        label: 'User Management',
-        icon: IconUsers,
-        initiallyOpened: false,
-        links: [
-            { label: 'Users Directory', link: '/users' },
-            { label: 'Roles & Permissions', link: '/users/roles' },
-            { label: 'All USers', link: '/users/search' },
-            { label: 'Upload Entry', link: '/users/uploadentry' },
-            { label: 'Collection Report', link: '/users/report' },
-        ]
-    },
-    {
-        label: 'User Dashboard',
-        icon: IconUsers,
-        initiallyOpened: false,
-        links: [
-            { label: 'Users Directory', link: '/users/detail' },
-            // { label: 'Roles & Permissions', link: '/users/roles' },
-            // { label: 'All USers', link: '/users/search' },
-            // { label: 'Upload Entry', link: '/users/uploadentry' },
-            // { label: 'Collection Report', link: '/users/report' },
-        ]
-    },
-    {
-        label: 'Financial Hub',
-        icon: IconWallet,
-        initiallyOpened: false,
-        links: [
-            { label: 'Transaction Logs', link: '/payments' },
-            { label: 'Revenue Analytics', link: '/stats-demo' },
-            { label: 'Invoice Settings', link: '/settings' },
-        ]
-    },
-    {
-        label: 'Staff Portal',
-        icon: IconUserShield,
-        initiallyOpened: false,
-        links: [
-            { label: 'Organization Roster', link: '/employees' },
-            { label: 'Attendance Center', link: '/attendance' },
-            { label: 'Leave Management', link: '/leave-management' },
-        ]
-    },
-];
+// Role: user → User Dashboard + Settings. Role: admin | employee → all items + Settings
+function getSidebarData(role: string): NavItem[] {
+    const roleLower = (role || 'user').toLowerCase();
+
+    if (roleLower === 'user') {
+        return [
+            { label: 'User Dashboard', icon: IconLayoutDashboard, link: '/users/detail' },
+            { label: 'Settings', icon: IconSettings, link: '/settings' },
+        ];
+    }
+
+    return [
+        { label: 'Dashboard', icon: IconLayoutDashboard, link: '/users' },
+        {
+            label: 'User Management',
+            icon: IconUsers,
+            initiallyOpened: false,
+            links: [
+                { label: 'Users Directory', link: '/users' },
+                { label: 'Roles & Permissions', link: '/users/roles' },
+                { label: 'Search Users', link: '/users/search' },
+                { label: 'Upload Entry', link: '/users/uploadentry' },
+                { label: 'Collection Report', link: '/users/report' },
+                { label: 'Collections', link: '/users/collections' },
+            ]
+        },
+        { label: 'Settings', icon: IconSettings, link: '/settings' },
+    ];
+}
 
 export function Sidebar({ opened, toggle, isMobile, closeMobile }: SidebarProps) {
     const pathname = usePathname();
     const router = useRouter();
+    const { isAuthenticated } = useSelector((state: RootState) => state.authStates);
+    const role = (isAuthenticated?.role as string) || 'user';
+    const mockData = getSidebarData(role);
 
-    // Track open sub-menus
     const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
 
     const handleSubMenuToggle = (label: string) => {
@@ -116,41 +100,41 @@ export function Sidebar({ opened, toggle, isMobile, closeMobile }: SidebarProps)
                     <Tooltip label={item.label} position="right" disabled={opened} transitionProps={{ duration: 0 }}>
                         <UnstyledButton
                             onClick={() => handleSubMenuToggle(item.label)}
-                            className={`w-full p-2.5 rounded-lg mb-1 flex items-center justify-between transition-all duration-200
-                                ${isActive ? 'bg-white text-[#1e40af] shadow-md' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
+                            className={`w-full py-3 px-3 rounded-xl mb-1.5 flex items-center justify-between
+                                ${isActive ? 'bg-white text-[#1e40af] shadow-md font-semibold' : 'text-white/80 hover:bg-white/10 hover:text-white'}`}
+                            style={{ fontSize: 'var(--text-sm)' }}
                         >
                             <Group gap={0}>
                                 <Icon size={20} stroke={1.5} />
-                                {opened && <Text size="sm" className="ml-3.5 font-bold">{item.label}</Text>}
+                                {opened && <Text size="sm" className="ml-3 font-semibold" style={{ fontSize: 'var(--text-sm)' }}>{item.label}</Text>}
                             </Group>
                             {opened && (
                                 <IconChevronDown
                                     size={14}
-                                    className={`transition-transform duration-200 ${isActive ? 'opacity-100' : 'opacity-60'} ${isSubOpen ? 'rotate-180' : ''}`}
+                                    className={`${isSubOpen ? 'rotate-180' : ''}`}
                                 />
                             )}
                         </UnstyledButton>
                     </Tooltip>
 
-                    {/* Sub-menu items */}
                     <Collapse in={isSubOpen && opened}>
-                        <div className="pl-9 pr-2 pb-3 space-y-1 relative before:content-[''] before:absolute before:left-5 before:top-0 before:bottom-3 before:w-[1px] before:bg-white/20">
-                            {item.links?.map((subItem) => (
-                                <UnstyledButton
-                                    key={subItem.label}
-                                    onClick={() => handleNavigate(subItem.link)}
-                                    className={`w-full py-2 px-4 rounded-lg text-[13px] text-left block transition-all relative
-                                        ${pathname === subItem.link
-                                            ? 'bg-white/20 text-white font-bold shadow-soft'
-                                            : 'text-white/70 hover:bg-white/10 hover:text-white font-medium'
-                                        }`}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <div className={`w-1.5 h-1.5 rounded-full transition-all ${pathname === subItem.link ? 'bg-white scale-100' : 'bg-white/30 scale-50'}`} />
-                                        {subItem.label}
-                                    </div>
-                                </UnstyledButton>
-                            ))}
+                        <div className="pl-10 pr-2 pb-3 pt-0.5 space-y-0.5 relative before:content-[''] before:absolute before:left-5 before:top-0 before:bottom-2 before:w-px before:bg-white/25">
+                            {item.links?.map((subItem) => {
+                                const subActive = pathname === subItem.link;
+                                return (
+                                    <UnstyledButton
+                                        key={subItem.label}
+                                        onClick={() => handleNavigate(subItem.link)}
+                                        className={`w-full py-2.5 px-4 rounded-lg text-left block relative font-medium ${subActive ? 'bg-white/25 text-white font-semibold' : 'text-white/75 hover:bg-white/10 hover:text-white'}`}
+                                        style={{ fontSize: 'var(--text-sm)' }}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${subActive ? 'bg-white' : 'bg-white/40'}`} />
+                                            {subItem.label}
+                                        </div>
+                                    </UnstyledButton>
+                                );
+                            })}
                         </div>
                     </Collapse>
                 </div>
@@ -161,11 +145,11 @@ export function Sidebar({ opened, toggle, isMobile, closeMobile }: SidebarProps)
             <Tooltip key={item.label} label={item.label} position="right" disabled={opened} transitionProps={{ duration: 0 }}>
                 <UnstyledButton
                     onClick={() => handleNavigate(item.link!)}
-                    className={`w-full p-2.5 rounded-lg mb-1 flex items-center transition-all duration-200
-                        ${pathname === item.link ? 'bg-white text-[#1e40af] shadow-md font-bold' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
+                    className={`w-full py-3 px-3 rounded-xl mb-1.5 flex items-center ${pathname === item.link ? 'bg-white text-[#1e40af] shadow-md font-semibold' : 'text-white/80 hover:bg-white/10 hover:text-white'}`}
+                    style={{ fontSize: 'var(--text-sm)' }}
                 >
                     <Icon size={20} stroke={1.5} />
-                    {opened && <Text size="sm" className="ml-3.5">{item.label}</Text>}
+                    {opened && <Text size="sm" className="ml-3 font-semibold" style={{ fontSize: 'var(--text-sm)' }}>{item.label}</Text>}
                 </UnstyledButton>
             </Tooltip>
         );
@@ -183,10 +167,7 @@ export function Sidebar({ opened, toggle, isMobile, closeMobile }: SidebarProps)
                         <div className="min-w-[32px] w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center border border-white/30 backdrop-blur-sm shadow-inner">
                             <Box className="w-4 h-4 rounded-full bg-white shadow-sm" />
                         </div>
-                        <Text
-                            className="text-xl font-bold tracking-tight text-white whitespace-nowrap"
-                            style={{ fontFamily: "'Outfit', sans-serif" }}
-                        >
+                        <Text className="font-bold tracking-tight text-white whitespace-nowrap" style={{ fontSize: 'var(--text-base)' }}>
                             CoreManage
                         </Text>
                     </div>
@@ -214,9 +195,8 @@ export function Sidebar({ opened, toggle, isMobile, closeMobile }: SidebarProps)
                 )}
             </div>
 
-            {/* Scrollable Content */}
-            <ScrollArea className="flex-1 p-3">
-                <div className="space-y-1">
+            <ScrollArea className="flex-1 px-3 py-2">
+                <div className="space-y-0.5">
                     {links.map((link, _index) => {
                         // Re-styling the generated links in a mapping would be cleaner, 
                         // but let's assume 'links' variable is already mapped correctly above.

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Button, TextInput, Text, Badge, LoadingOverlay, Table, Paper, Modal, Input, Group, Divider, Select, Alert } from '@mantine/core';
+import { Button, TextInput, Text, Badge, LoadingOverlay, Table, Paper, Modal, Input, Group, Divider, Select } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconSearch, IconX, IconCalendar, IconCoin, IconUser, IconId, IconPrinter, IconPencil, IconPlus } from '@tabler/icons-react';
 import { db } from '@/lib/firebase';
@@ -92,8 +92,7 @@ export default function UserReportPage() {
               const userData = userDocSnap.data();
               username = userData.username || userData.Username || userData.name || userData.Name || data.userId;
             }
-          } catch (err) {
-            console.error('Error fetching user data:', err);
+          } catch {
             username = data.userId; // Fallback to userId if user data fetch fails
           }
         }
@@ -182,8 +181,7 @@ export default function UserReportPage() {
       });
 
       setPaymentRecords(allRecords);
-    } catch (error) {
-      console.error('Error fetching payment records:', error);
+    } catch {
       setPaymentRecords([]);
       setAlertMessage({ type: 'error', message: 'Failed to load payment records. Please try again.' });
       setTimeout(() => setAlertMessage(null), 5000);
@@ -294,8 +292,8 @@ export default function UserReportPage() {
       ));
 
       setEditingUser(null);
-    } catch (error) {
-      console.error("Error updating document: ", error);
+    } catch {
+      notifications.show({ title: 'Error', message: 'Could not update record.', color: 'red', position: 'top-right' });
     }
   };
 
@@ -353,8 +351,8 @@ export default function UserReportPage() {
         isPaid: false
       });
       setIsNewUserModalOpen(false);
-    } catch (error) {
-      console.error("Error adding new payment record: ", error);
+    } catch {
+      notifications.show({ title: 'Error', message: 'Could not add payment record.', color: 'red', position: 'top-right' });
     }
   };
 
@@ -479,10 +477,19 @@ export default function UserReportPage() {
               <div className="flex items-end">
                 <Button
                   onClick={() => {
-                    // Print functionality - print only the table
+                    if (filteredRecords.length === 0) {
+                      notifications.show({
+                        title: 'Cannot print',
+                        message: 'No payment records available for print',
+                        color: 'orange',
+                        position: 'top-right'
+                      });
+                      return;
+                    }
                     window.print();
                   }}
-                  className="bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white flex items-center justify-center gap-2 w-full h-[44px] rounded-lg shadow-md transition-all duration-200"
+                  disabled={filteredRecords.length === 0}
+                  className="bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white flex items-center justify-center gap-2 w-full h-[44px] rounded-lg shadow-md transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
                   size="md"
                   leftSection={<IconPrinter size={18} />}
                 >
@@ -498,7 +505,7 @@ export default function UserReportPage() {
           <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
             <div className="w-full flex-1 min-w-0">
               <div className="w-full flex flex-col md:flex-row md:items-center gap-2">
-                <Text className="text-xl font-bold text-gray-800 break-words">
+                <Text className="page-heading break-words">
                   Payment Records Report
                 </Text>
                 <Badge color="blue" variant="light" className="text-xs px-3 py-1 flex-shrink-0 mt-1 md:mt-0">
@@ -519,13 +526,13 @@ export default function UserReportPage() {
                 <Table verticalSpacing="sm" horizontalSpacing="lg" className="min-w-full">
                   <Table.Thead className="bg-gray-50/50">
                     <Table.Tr>
-                      <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[100px] sm:min-w-[120px]">User ID</Table.Th>
-                      <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[100px] sm:min-w-[120px]">Name</Table.Th>
-                      <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[80px] sm:min-w-[100px]">Date</Table.Th>
-                      <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[80px] sm:min-w-[100px]">Paid Date</Table.Th>
-                      <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[100px] sm:min-w-[120px]">Paid By Name</Table.Th>
-                      <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[80px] sm:min-w-[100px]">Paid Amount</Table.Th>
-                      <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[60px] sm:min-w-[80px]">Status</Table.Th>
+                      <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[100px] sm:min-w-[120px]" style={{ fontSize: 'var(--text-sm)' }}>User ID</Table.Th>
+                      <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[100px] sm:min-w-[120px]" style={{ fontSize: 'var(--text-sm)' }}>Name</Table.Th>
+                      <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[80px] sm:min-w-[100px]" style={{ fontSize: 'var(--text-sm)' }}>Date</Table.Th>
+                      <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[80px] sm:min-w-[100px]" style={{ fontSize: 'var(--text-sm)' }}>Paid Date</Table.Th>
+                      <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[100px] sm:min-w-[120px]" style={{ fontSize: 'var(--text-sm)' }}>Paid By Name</Table.Th>
+                      <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[80px] sm:min-w-[100px]" style={{ fontSize: 'var(--text-sm)' }}>Paid Amount</Table.Th>
+                      <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[60px] sm:min-w-[80px]" style={{ fontSize: 'var(--text-sm)' }}>Status</Table.Th>
                     </Table.Tr>
                   </Table.Thead>
                   <Table.Tbody>

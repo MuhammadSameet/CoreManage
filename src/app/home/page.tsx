@@ -32,7 +32,7 @@ export default function HomePage() {
   const features = [
     { title: 'User Engine', desc: 'Manage your enterprise hierarchy and access controls with precision.', icon: <IconUsers size={24} />, color: 'blue', link: '/users' },
     { title: 'Billing Core', desc: 'Securely handle financial transactions and automated invoicing.', icon: <IconWallet size={24} />, color: 'green', link: '/payments' },
-    { title: 'Live Analytics', desc: 'Monitor your business health with real-time data visualization.', icon: <IconChartBar size={24} />, color: 'indigo', link: '/stats-demo' },
+    { title: 'Live Analytics', desc: 'Monitor your business health with real-time data visualization.', icon: <IconChartBar size={24} />, color: 'indigo', link: '/users' },
   ];
 
   return (
