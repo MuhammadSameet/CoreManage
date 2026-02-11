@@ -5,8 +5,8 @@ import { collection, query, where, getDocs, orderBy, doc, getDoc } from 'firebas
 import { db } from '@/lib/firebase';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/redux/store';
-import { Table, Text, Loader, Badge, Group, Button, TextInput, Select, Stack } from '@mantine/core';
-import { IconSearch, IconCalendar, IconUser, IconCash, IconCreditCard } from '@tabler/icons-react';
+import { Table, Text, Loader, Badge, Group, Button, TextInput, Select, Stack, Paper, LoadingOverlay } from '@mantine/core';
+import { IconSearch, IconCalendar, IconUser, IconCash, IconCreditCard, IconX } from '@tabler/icons-react';
 import { DatePickerInput } from '@mantine/dates';
 import dayjs from 'dayjs';
 
@@ -33,13 +33,13 @@ type PaymentRecord = {
 const UserDetailPage = () => {
   const [paymentRecords, setPaymentRecords] = useState<PaymentRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]);
   const [dataTypes, setDataTypes] = useState<string[]>(['all']);
+  const [currentUsername, setCurrentUsername] = useState<string>('');
 
   const { isAuthenticated } = useSelector((state: RootState) => state.authStates);
 
-  // Fetch user's data from Firebase - similar to users/report page
+  // Fetch user's data from Firebase - filter by logged-in username
   useEffect(() => {
     const fetchData = async () => {
       // Check if user is authenticated first
@@ -49,33 +49,52 @@ const UserDetailPage = () => {
         return;
       }
 
-      console.log("isAuthenticated object:", isAuthenticated);
+      console.log("DEBUG AUTH START");
+      console.log("isAuthenticated:", isAuthenticated);
+      console.log("Type of isAuthenticated:", typeof isAuthenticated);
+      console.log("Keys:", Object.keys(isAuthenticated));
+      console.log("Username (lowercase):", (isAuthenticated as any).username);
+      console.log("Username (uppercase):", (isAuthenticated as any).Username);
+      console.log("DEBUG AUTH END");
 
       setLoading(true);
 
       try {
-        // Use the actual logged-in user's username from Redux store
-        const usernameToUse = isAuthenticated.username;
-        const userIdToUse = isAuthenticated.uid;
-        console.log("Fetching data for user - Username:", usernameToUse, "UserID:", userIdToUse);
+        // Get the logged-in user's username and UID
+        let loggedInUsername = isAuthenticated.username;
+        const loggedInUid = isAuthenticated.uid;
 
-        // If username is not available, we can't filter properly
-        if (!usernameToUse && !userIdToUse) {
-          console.log("Username and UserID not available, cannot filter data");
-          setLoading(false);
-          return;
+        // Fallback: Fetch username from Firestore if missing from Redux
+        if (!loggedInUsername && loggedInUid) {
+          try {
+            const userDocRef = doc(db, 'uploadEntry', loggedInUid);
+            const userDocSnap = await getDoc(userDocRef);
+            if (userDocSnap.exists()) {
+              const userData = userDocSnap.data();
+              loggedInUsername = userData.username || userData.Username || userData.name || userData.Name;
+            }
+          } catch (error) {
+            console.error("Error fetching user profile:", error);
+          }
         }
 
-        // Query the payments collection for payment records
+        setCurrentUsername(loggedInUsername || '');
+
+        if (!loggedInUsername && !loggedInUid) {
+          console.warn("User is authenticated but both Username and UID are missing:", isAuthenticated);
+          // Username not available in isAuthenticated object
+          // Don't return - let's show all data if username is not available
+        }
+
         const paymentsQuery = query(collection(db, 'payments'), orderBy('date', 'desc'));
         const paymentsSnapshot = await getDocs(paymentsQuery);
         const paymentsData: PaymentRecord[] = [];
 
-        console.log("Total payment docs found:", paymentsSnapshot.size);
+        // console.log("Total payment docs found:", paymentsSnapshot.size);
 
         for (const paymentDoc of paymentsSnapshot.docs) {
           const data = paymentDoc.data();
-          console.log("Processing payment doc:", paymentDoc.id, data);
+          // console.log("Processing payment doc:", paymentDoc.id, data);
 
           // Helper function to convert Firestore timestamp to string
           const convertTimestamp = (timestamp: any) => {
@@ -91,7 +110,7 @@ const UserDetailPage = () => {
               return new Date(timestamp.seconds * 1000).toISOString().split('T')[0];
             }
             return typeof timestamp === 'string' ? timestamp.split('T')[0] :
-                   new Date().toISOString().split('T')[0];
+              new Date().toISOString().split('T')[0];
           };
 
           // Helper function to safely extract numeric values
@@ -102,11 +121,8 @@ const UserDetailPage = () => {
             return Number(value) || defaultValue;
           };
 
-          // Check if this payment record belongs to the current user by checking multiple possible fields
-          // First, try to get the username from the user document in uploadEntry collection (similar to users/report page)
+          // Get the username from the user document in uploadEntry collection
           let username = 'N/A';
-          let userIdFromLookup = null;
-          
           if (data.userId) {
             try {
               const userDocRef = doc(db, 'uploadEntry', data.userId);
@@ -114,38 +130,33 @@ const UserDetailPage = () => {
               if (userDocSnap.exists()) {
                 const userData = userDocSnap.data();
                 username = userData.username || userData.Username || userData.name || userData.Name || data.userId;
-                userIdFromLookup = data.userId;
               }
             } catch (err) {
               console.error('Error fetching user data:', err);
               username = data.userId; // Fallback to userId if user data fetch fails
-              userIdFromLookup = data.userId;
             }
           }
 
-          // If we still don't have a username from the lookup, try other fields in the payment record
-          if (username === 'N/A' || username === data.userId) {
-            // Check if the username is directly in the payment record
-            username = data.userName || data.username || data.name || data.Name || data.userId || 'N/A';
+          // Robust Filtering: Check Username Match OR UID Match
+          // Request: "userId use nhi krna sirf username use kro"
+          // We check both the linked username (from uploadEntry) and the record's userName string
+          const isUsernameMatch = loggedInUsername && (
+            (username.toLowerCase() === loggedInUsername.toLowerCase()) ||
+            (data.userName && typeof data.userName === 'string' && data.userName.toLowerCase() === loggedInUsername.toLowerCase())
+          );
+
+          const shouldInclude = isUsernameMatch;
+
+          if (!shouldInclude) {
+            // console.log(`Payment Mismatch: Record username '${username}' !== LoggedIn '${loggedInUsername}'`);
           }
 
-          console.log("Comparing payment username:", username, "with target:", usernameToUse);
-          console.log("Comparing payment userId:", data.userId, "with target:", userIdToUse);
-          console.log("Comparing payment userIdFromLookup:", userIdFromLookup, "with target:", userIdToUse);
-
-          // Check if this payment record belongs to the current user by username OR userId
-          const isUsernameMatch = usernameToUse && username.toLowerCase() === usernameToUse.toLowerCase();
-          const isUserIdMatch = userIdToUse && (data.userId === userIdToUse || userIdFromLookup === userIdToUse);
-
-          console.log("isUsernameMatch:", isUsernameMatch, "isUserIdMatch:", isUserIdMatch);
-
-          if (isUsernameMatch || isUserIdMatch) {
-            console.log("Match found for payment:", paymentDoc.id);
+          if (shouldInclude) {
             paymentsData.push({
               id: paymentDoc.id,
               userId: data.userId || 'N/A',
               username: username,
-              userName: data.userName || data.username || 'N/A',
+              userName: data.userName || 'N/A',
               date: convertToDateStr(data.date),
               paidByTime: convertTimestamp(data.paidByTime || data.paidByDateTime),
               paidByName: data.paidByName || 'System',
@@ -164,11 +175,11 @@ const UserDetailPage = () => {
         const usersSnapshot = await getDocs(usersQuery);
         const usersData: PaymentRecord[] = [];
 
-        console.log("Total uploadEntry docs found:", usersSnapshot.size);
+        // console.log("Total uploadEntry docs found:", usersSnapshot.size);
 
         for (const userDoc of usersSnapshot.docs) {
           const data = userDoc.data();
-          console.log("Processing uploadEntry doc:", userDoc.id, data);
+          // console.log("Processing uploadEntry doc:", userDoc.id, data);
 
           // Helper function to convert Firestore timestamp to string
           const convertTimestamp = (timestamp: any) => {
@@ -184,7 +195,7 @@ const UserDetailPage = () => {
               return new Date(timestamp.seconds * 1000).toISOString().split('T')[0];
             }
             return typeof timestamp === 'string' ? timestamp.split('T')[0] :
-                   new Date().toISOString().split('T')[0];
+              new Date().toISOString().split('T')[0];
           };
 
           // Helper function to safely extract numeric values
@@ -195,17 +206,22 @@ const UserDetailPage = () => {
             return Number(value) || defaultValue;
           };
 
-          // Check if this user record belongs to the current user by username
+          // Get user information
           const userUsername = data.Username || data.username || data.name || data.Name || 'N/A';
-          console.log("Checking uploadEntry for user:", userUsername, "vs", usernameToUse);
-          
-          const isUserUsernameMatch = usernameToUse && userUsername.toLowerCase() === usernameToUse.toLowerCase();
-          const isUserIdMatch = userIdToUse && userDoc.id === userIdToUse;
-          
-          console.log("isUserUsernameMatch:", isUserUsernameMatch, "isUserIdMatch:", isUserIdMatch);
 
-          if (isUserUsernameMatch || isUserIdMatch) {
-            console.log("Match found for uploadEntry:", userDoc.id);
+          // Robust Filtering: Check Username Match OR UID Match
+          // Request: "userId use nhi krna sirf username use kro"
+          const isUsernameMatch = loggedInUsername && (
+            (userUsername.toLowerCase() === loggedInUsername.toLowerCase())
+          );
+
+          const shouldInclude = isUsernameMatch;
+
+          if (!shouldInclude) {
+            // console.log(`User Record Mismatch: Record username '${userUsername}' !== LoggedIn '${loggedInUsername}'`);
+          }
+
+          if (shouldInclude) {
             // Calculate the total amount and balance
             const balance = getNumericValue(data.balance, 0);
             const monthlyFees = getNumericValue(data.monthlyFees, 0);
@@ -232,8 +248,8 @@ const UserDetailPage = () => {
           }
         }
 
-        console.log("Payments found:", paymentsData.length);
-        console.log("UploadEntries found:", usersData.length);
+        // console.log("Payments found:", paymentsData.length);
+        // console.log("UploadEntries found:", usersData.length);
 
         // Combine both datasets and sort by date (most recent first)
         const allRecords = [...paymentsData, ...usersData].sort((a, b) => {
@@ -243,7 +259,7 @@ const UserDetailPage = () => {
           return dateB - dateA; // Descending order (most recent first)
         });
 
-        console.log("Combined records:", allRecords.length);
+        // console.log("Combined records:", allRecords.length);
         setPaymentRecords(allRecords);
       } catch (error) {
         console.error('Error fetching user data:', error);
@@ -253,16 +269,10 @@ const UserDetailPage = () => {
     };
 
     fetchData();
-  }, [JSON.stringify(isAuthenticated)]); // Use JSON.stringify to avoid dependency array size changes
+  }, [isAuthenticated]); // Re-fetch when authentication state changes
 
   // Apply filters
   const filteredRecords = paymentRecords.filter(record => {
-    // Search filter - now includes User ID (username), Name (userName), and Paid By Name
-    const matchesSearch =
-      record.username.toLowerCase().includes(searchTerm.toLowerCase()) ||  // User ID
-      record.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||  // Name
-      record.paidByName.toLowerCase().includes(searchTerm.toLowerCase());  // Paid By Name
-
     // Date range filter
     let matchesDateRange = true;
     if (dateRange[0] || dateRange[1]) {
@@ -308,7 +318,7 @@ const UserDetailPage = () => {
       }
     }
 
-    // Status filter (All/Paid/Unpaid) - replacing the previous recordType filter
+    // Status filter (All/Paid/Unpaid)
     let matchesStatus = true;
     if (dataTypes[0] && dataTypes[0] !== 'all') {
       if (dataTypes[0] === 'paid') {
@@ -318,7 +328,7 @@ const UserDetailPage = () => {
       }
     }
 
-    return matchesSearch && matchesDateRange && matchesStatus;
+    return matchesDateRange && matchesStatus;
   });
 
   // Calculate statistics
@@ -341,137 +351,265 @@ const UserDetailPage = () => {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="mb-8">
-        <Text className="text-2xl font-bold text-gray-800">User Dashboard</Text>
-        <Text className="text-gray-600">View your personal records and transactions</Text>
-      </div>
+    <>
+      <style jsx global>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #payment-table-container, #payment-table-container * {
+            visibility: visible;
+          }
+          #payment-table-container {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+          }
+          .hidden-print {
+            display: none !important;
+          }
+        }
+      `}</style>
+      <div className="space-y-6">
+        <div className="mb-8">
+          <Text className="text-2xl font-bold text-gray-800">
+            {currentUsername ? `${currentUsername} Dashboard` : 'User Dashboard'}
+          </Text>
+          <Text className="text-gray-600">View your personal records and transactions</Text>
+        </div>
 
-      {/* Filters */}
-      <Stack gap="md" className="mb-6 p-4 bg-gray-50 rounded-lg">
-        <Group justify="space-between">
-          <TextInput
-            placeholder="Search by ID, name, or paid by name..."
-            leftSection={<IconSearch size={16} />}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.currentTarget.value)}
-            className="flex-1 max-w-md"
-          />
-          
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={dateRange[0] ? new Date(dateRange[0]).toISOString().split('T')[0] : ''}
-              onChange={(e) => {
-                const newStart = e.currentTarget.value ? new Date(e.currentTarget.value) : null;
-                setDateRange([newStart, dateRange[1]]);
-              }}
-              className="w-full h-10 px-3 py-2 text-sm text-gray-700 placeholder-gray-400 border border-gray-300 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <span className="text-gray-500">to</span>
-            <input
-              type="date"
-              value={dateRange[1] ? new Date(dateRange[1]).toISOString().split('T')[0] : ''}
-              onChange={(e) => {
-                const newEnd = e.currentTarget.value ? new Date(e.currentTarget.value) : null;
-                setDateRange([dateRange[0], newEnd]);
-              }}
-              className="w-full h-10 px-3 py-2 text-sm text-gray-700 placeholder-gray-400 border border-gray-300 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <StatsCard title="Total Amount Paid" value={formatCurrency(totalAmountPaid)} variant="green" />
+          <StatsCard title="Total Unpaid Amount" value={formatCurrency(totalUnpaidAmount)} variant="orange" />
+          <StatsCard title="Total Payable Amount" value={formatCurrency(totalPayableAmount)} variant="blue" />
+        </div>
+
+        {/* Filters */}
+        <Paper radius="lg" withBorder className="p-6 bg-white border-gray-200 shadow-md">
+          <div className="flex flex-col space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <Text size="sm" className="mb-1 text-gray-600 font-medium">Start Date</Text>
+                <input
+                  type="date"
+                  value={dateRange[0] ? new Date(dateRange[0]).toISOString().split('T')[0] : ''}
+                  onChange={(e) => {
+                    const newStart = e.currentTarget.value ? new Date(e.currentTarget.value) : null;
+                    setDateRange([newStart, dateRange[1]]);
+                  }}
+                  className="w-full h-10 px-3 py-2 text-sm text-gray-700 placeholder-gray-400 border border-gray-300 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <Text size="sm" className="mb-1 text-gray-600 font-medium">End Date</Text>
+                <input
+                  type="date"
+                  value={dateRange[1] ? new Date(dateRange[1]).toISOString().split('T')[0] : ''}
+                  onChange={(e) => {
+                    const newEnd = e.currentTarget.value ? new Date(e.currentTarget.value) : null;
+                    setDateRange([dateRange[0], newEnd]);
+                  }}
+                  className="w-full h-10 px-3 py-2 text-sm text-gray-700 placeholder-gray-400 border border-gray-300 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <Text size="sm" className="mb-2 text-gray-600 font-medium">
+                  Status
+                </Text>
+                <Select
+                  placeholder="All"
+                  value={dataTypes[0]}
+                  onChange={(value) => setDataTypes(value ? [value] : ['all'])}
+                  data={[
+                    { value: 'all', label: 'All' },
+                    { value: 'paid', label: 'Paid' },
+                    { value: 'unpaid', label: 'Unpaid' },
+                  ]}
+                  size="md"
+                  className="w-full"
+                />
+              </div>
+            </div>
           </div>
-          
-          <Select
-            placeholder="Select status"
-            data={[
-              { value: 'all', label: 'All' },
-              { value: 'paid', label: 'Paid' },
-              { value: 'unpaid', label: 'Unpaid' },
-            ]}
-            value={dataTypes[0]}
-            onChange={(value) => setDataTypes(value ? [value] : [])}
-            className="flex-1 max-w-xs"
-          />
-        </Group>
-      </Stack>
+        </Paper>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <StatsCard title="Total Amount Paid" value={formatCurrency(totalAmountPaid)} variant="green" />
-        <StatsCard title="Total Unpaid Amount" value={formatCurrency(totalUnpaidAmount)} variant="orange" />
-        <StatsCard title="Total Payable Amount" value={formatCurrency(totalPayableAmount)} variant="blue" />
-      </div>
+        {/* Payment Records Table */}
+        <div id="payment-table-container">
+          <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
+            <div className="w-full flex-1 min-w-0">
+              <div className="w-full flex flex-col md:flex-row md:items-center gap-2">
+                <Text className="text-xl font-bold text-gray-800 break-words">
+                  User Payment Records
+                </Text>
+                <Badge color="blue" variant="light" className="text-xs px-3 py-1 flex-shrink-0 mt-1 md:mt-0">
+                  {filteredRecords.length} {filteredRecords.length === 1 ? 'record' : 'records'}
+                </Badge>
+              </div>
+            </div>
+            <Text className="text-sm text-gray-500 text-left md:text-right mt-1 md:mt-0 w-auto">
+              Showing {filteredRecords.length} record{filteredRecords.length !== 1 ? 's' : ''}
+            </Text>
+          </div>
 
-      {/* Data Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <Table striped highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider">User ID</Table.Th>
-              <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider">Name</Table.Th>
-              <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider">Date</Table.Th>
-              <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider">Paid Date</Table.Th>
-              <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider">Paid By Name</Table.Th>
-              <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider">Paid Amount</Table.Th>
-              <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider">Status</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {filteredRecords.length > 0 ? (
-              filteredRecords.map((record, index) => (
-                <Table.Tr key={`${record.recordType}-${record.id}-${index}`} className="hover:bg-gray-50">
-                  <Table.Td className="font-semibold text-gray-700">
-                    {record.username}
-                  </Table.Td>
-                  <Table.Td>
-                    {record.userName}
-                  </Table.Td>
-                  <Table.Td>
-                    {typeof record.date === 'string'
-                      ? record.date
-                      : typeof record.date === 'object' && record.date && 'seconds' in record.date
-                        ? new Date((record.date as any).seconds * 1000).toLocaleDateString()
-                        : new Date(record.date).toLocaleDateString()}
-                  </Table.Td>
-                  <Table.Td>
-                    {record.paidByTime ?
-                      (typeof record.paidByTime === 'object' && 'seconds' in record.paidByTime
-                        ? new Date((record.paidByTime as any).seconds * 1000).toLocaleDateString()
-                        : new Date(record.paidByTime).toLocaleDateString())
-                      : 'N/A'}
-                  </Table.Td>
-                  <Table.Td>
-                    {record.paidByName}
-                  </Table.Td>
-                  <Table.Td className="font-bold text-gray-800">
-                    Rs. {record.amount.toFixed(2)}
-                  </Table.Td>
-                  <Table.Td>
-                    <Badge
-                      variant="light"
-                      color={record.isPaid ? 'green' : 'orange'}
-                      radius="sm"
-                      className="font-bold py-2 px-3 text-xs"
-                    >
-                      {record.isPaid ? 'PAID' : 'UNPAID'}
-                    </Badge>
-                  </Table.Td>
-                </Table.Tr>
-              ))
-            ) : (
-              <Table.Tr>
-                <Table.Td colSpan={7} className="text-center py-8">
-                  <Text className="text-gray-500">
-                    {searchTerm || dateRange[0] || dateRange[1] 
-                      ? 'No records found matching your filters' 
-                      : 'No records available'}
-                  </Text>
-                </Table.Td>
-              </Table.Tr>
-            )}
-          </Table.Tbody>
-        </Table>
+          {/* Responsive table container */}
+          <div className="overflow-x-auto">
+            {/* Desktop/Tablet view - Table */}
+            <div className="hidden md:block">
+              <Paper radius="md" withBorder className="overflow-hidden border-gray-100 shadow-sm">
+                <Table verticalSpacing="sm" horizontalSpacing="lg" className="min-w-full">
+                  <Table.Thead className="bg-gray-50/50">
+                    <Table.Tr>
+                      <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[100px] sm:min-w-[120px]">User ID</Table.Th>
+                      <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[100px] sm:min-w-[120px]">Name</Table.Th>
+                      <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[80px] sm:min-w-[100px]">Date</Table.Th>
+                      <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[80px] sm:min-w-[100px]">Paid Date</Table.Th>
+                      <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[100px] sm:min-w-[120px]">Paid By Name</Table.Th>
+                      <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[80px] sm:min-w-[100px]">Paid Amount</Table.Th>
+                      <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[60px] sm:min-w-[80px]">Status</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {loading ? (
+                      <Table.Tr>
+                        <Table.Td colSpan={7} className="text-center py-10">
+                          <LoadingOverlay visible={true} overlayProps={{ radius: "sm", blur: 2 }} />
+                          <Text className="text-center py-4">Loading payment records...</Text>
+                        </Table.Td>
+                      </Table.Tr>
+                    ) : filteredRecords.length > 0 ? (
+                      filteredRecords.map((record) => (
+                        <Table.Tr key={record.id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-100 last:border-b-0">
+                          <Table.Td className="font-semibold text-gray-700 py-2 px-2 sm:px-4 min-w-[100px] sm:min-w-[120px]">
+                            {record.username}
+                          </Table.Td>
+                          <Table.Td className="py-2 px-2 sm:px-4 min-w-[100px] sm:min-w-[120px]">
+                            {record.userName}
+                          </Table.Td>
+                          <Table.Td className="py-2 px-2 sm:px-4 min-w-[80px] sm:min-w-[100px]">
+                            {typeof record.date === 'string'
+                              ? record.date
+                              : typeof record.date === 'object' && record.date && 'seconds' in record.date
+                                ? new Date((record.date as any).seconds * 1000).toLocaleDateString()
+                                : new Date(record.date).toLocaleDateString()}
+                          </Table.Td>
+                          <Table.Td className="py-2 px-2 sm:px-4 min-w-[80px] sm:min-w-[100px]">
+                            {record.paidByTime ?
+                              (typeof record.paidByTime === 'object' && 'seconds' in record.paidByTime
+                                ? new Date((record.paidByTime as any).seconds * 1000).toLocaleDateString()
+                                : new Date(record.paidByTime).toLocaleDateString())
+                              : 'N/A'}
+                          </Table.Td>
+                          <Table.Td className="py-2 px-2 sm:px-4 min-w-[100px] sm:min-w-[120px]">
+                            {record.paidByName}
+                          </Table.Td>
+                          <Table.Td className="font-bold text-gray-800 py-2 px-2 sm:px-4 min-w-[80px] sm:min-w-[100px]">
+                            Rs. {record.amount.toFixed(2)}
+                          </Table.Td>
+                          <Table.Td className="py-2 px-2 sm:px-4 min-w-[60px] sm:min-w-[80px]">
+                            <Badge
+                              variant="light"
+                              color={record.isPaid ? 'green' : 'orange'}
+                              radius="sm"
+                              className="font-bold py-2 px-3 text-xs"
+                            >
+                              {record.isPaid ? 'PAID' : 'UNPAID'}
+                            </Badge>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))
+                    ) : (
+                      <Table.Tr>
+                        <Table.Td colSpan={7} className="text-center py-10 text-gray-500">
+                          {dateRange[0] || dateRange[1] || dataTypes[0] !== 'all'
+                            ? 'No payment records found matching your filters'
+                            : 'No payment records available'}
+                        </Table.Td>
+                      </Table.Tr>
+                    )}
+                  </Table.Tbody>
+                </Table>
+              </Paper>
+            </div>
+
+            {/* Mobile view - Cards */}
+            <div className="md:hidden">
+              {loading ? (
+                <div className="flex justify-center items-center py-10">
+                  <LoadingOverlay visible={true} overlayProps={{ radius: "sm", blur: 2 }} />
+                  <Text className="text-center py-4">Loading payment records...</Text>
+                </div>
+              ) : filteredRecords.length > 0 ? (
+                <div className="space-y-4">
+                  {filteredRecords.map((record) => (
+                    <Paper key={record.id} radius="md" withBorder className="p-4 border-gray-100 shadow-sm">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Text size="xs" className="text-gray-500">User ID:</Text>
+                          <Text className="font-semibold text-gray-700">{record.username}</Text>
+                        </div>
+                        <div>
+                          <Text size="xs" className="text-gray-500">Name:</Text>
+                          <Text className="text-gray-700">{record.userName}</Text>
+                        </div>
+                        <div>
+                          <Text size="xs" className="text-gray-500">Date:</Text>
+                          <Text className="text-gray-700">
+                            {typeof record.date === 'string'
+                              ? record.date
+                              : typeof record.date === 'object' && record.date && 'seconds' in record.date
+                                ? new Date((record.date as any).seconds * 1000).toLocaleDateString()
+                                : new Date(record.date).toLocaleDateString()}
+                          </Text>
+                        </div>
+                        <div>
+                          <Text size="xs" className="text-gray-500">Paid Date:</Text>
+                          <Text className="text-gray-700">
+                            {record.paidByTime ?
+                              (typeof record.paidByTime === 'object' && 'seconds' in record.paidByTime
+                                ? new Date((record.paidByTime as any).seconds * 1000).toLocaleDateString()
+                                : new Date(record.paidByTime).toLocaleDateString())
+                              : 'N/A'}
+                          </Text>
+                        </div>
+                        <div>
+                          <Text size="xs" className="text-gray-500">Paid By:</Text>
+                          <Text className="text-gray-700">{record.paidByName}</Text>
+                        </div>
+                        <div>
+                          <Text size="xs" className="text-gray-500">Amount:</Text>
+                          <Text className="font-bold text-gray-800">Rs. {record.amount.toFixed(2)}</Text>
+                        </div>
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-gray-100">
+                        <div>
+                          <Text size="xs" className="text-gray-500">Status:</Text>
+                          <Badge
+                            variant="light"
+                            color={record.isPaid ? 'green' : 'orange'}
+                            radius="sm"
+                            className="font-bold py-1 px-2 text-xs mt-1"
+                          >
+                            {record.isPaid ? 'PAID' : 'UNPAID'}
+                          </Badge>
+                        </div>
+                      </div>
+                    </Paper>
+                  ))}
+                </div>
+              ) : (
+                <Paper radius="md" withBorder className="p-6 text-center text-gray-500 border-gray-100 shadow-sm">
+                  {dateRange[0] || dateRange[1] || dataTypes[0] !== 'all'
+                    ? 'No payment records found matching your filters'
+                    : 'No payment records available'}
+                </Paper>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

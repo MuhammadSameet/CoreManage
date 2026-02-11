@@ -124,18 +124,18 @@ export default function UploadEntrySearchTable() {
 
         // Calculate totalAmount and balance based on your data structure
         const rawBalance = data.Balance || data.balance || data.currentBalance || data.CurrentBalance || data.remaining || data.Remaining ||
-                          data.current_balance || data.Current_Balance || data.remaining_amount || data.Remaining_Amount ||
-                          data.currentAmount || data.CurrentAmount || data.current_amount || data.Current_Amount || 0;
+          data.current_balance || data.Current_Balance || data.remaining_amount || data.Remaining_Amount ||
+          data.currentAmount || data.CurrentAmount || data.current_amount || data.Current_Amount || 0;
         const balance = typeof rawBalance === 'number' ? rawBalance :
-                       typeof rawBalance === 'string' ? parseFloat(rawBalance) || 0 :
-                       typeof rawBalance === 'object' && rawBalance && 'seconds' in rawBalance ? 0 : // Handle Firestore timestamps
-                       Number(rawBalance) || 0;
+          typeof rawBalance === 'string' ? parseFloat(rawBalance) || 0 :
+            typeof rawBalance === 'object' && rawBalance && 'seconds' in rawBalance ? 0 : // Handle Firestore timestamps
+              Number(rawBalance) || 0;
 
         const rawMonthlyFees = data.monthlyFees || data.MonthlyFees || data.monthly_fee || data.Monthly_Fee ||
-                              data.monthly_fees || data.Monthly_Fees || data.monthlyFee || data.MonthlyFee || 0;
+          data.monthly_fees || data.Monthly_Fees || data.monthlyFee || data.MonthlyFee || 0;
         const monthlyFees = typeof rawMonthlyFees === 'number' ? rawMonthlyFees :
-                           typeof rawMonthlyFees === 'string' ? parseFloat(rawMonthlyFees) || 0 :
-                           Number(rawMonthlyFees) || 0;
+          typeof rawMonthlyFees === 'string' ? parseFloat(rawMonthlyFees) || 0 :
+            Number(rawMonthlyFees) || 0;
 
         // Look for potential amount fields that could represent the total payment
         const potentialAmountFields = [
@@ -149,8 +149,8 @@ export default function UploadEntrySearchTable() {
         for (const field of potentialAmountFields) {
           if (field !== undefined && field !== null) {
             const parsed = typeof field === 'number' ? field :
-                          typeof field === 'string' ? parseFloat(field) || 0 :
-                          Number(field) || 0;
+              typeof field === 'string' ? parseFloat(field) || 0 :
+                Number(field) || 0;
             if (parsed !== 0) {
               totalAmount = parsed;
               break;
@@ -186,45 +186,67 @@ export default function UploadEntrySearchTable() {
         });
       });
 
+      // Create a map for quick user lookup from the already fetched usersData
+      const usersMap = new Map<string, User>();
+      usersData.forEach(user => {
+        usersMap.set(user.id, user);
+      });
+
       // Also fetch payment records to show in the table
       const paymentsQuery = query(collection(db, 'payments'), orderBy('date', 'desc'));
       const paymentsSnapshot = await getDocs(paymentsQuery);
 
-      paymentsSnapshot.forEach((paymentDoc) => {
+      for (const paymentDoc of paymentsSnapshot.docs) {
         const data = paymentDoc.data();
-
-        // Get the username from the user document in uploadEntry collection
         let username = 'N/A';
-        if (data.userId) {
-          const userDocRef = doc(db, 'uploadEntry', data.userId);
-          getDoc(userDocRef).then(userDocSnap => {
+        let userAddress = 'Payment Record';
+        let userPackage = 'Payment';
+        let userName = data.userName || 'N/A';
+
+        // Try to find user in map first (efficient)
+        if (data.userId && usersMap.has(data.userId)) {
+          const user = usersMap.get(data.userId)!;
+          username = user.username;
+          userAddress = user.address;
+          userPackage = user.package;
+          userName = user.name; // Use current user name
+        } else if (data.userId) {
+          // Fallback: Fetch if not in current list (legacy or deleted?)
+          try {
+            const userDocRef = doc(db, 'uploadEntry', data.userId);
+            const userDocSnap = await getDoc(userDocRef);
             if (userDocSnap.exists()) {
               const userData = userDocSnap.data();
               username = userData.username || userData.Username || userData.name || userData.Name || data.userId;
+              userAddress = userData.address || userData.Address || userAddress;
+              userPackage = userData.package || userData.Package || userPackage;
+              userName = userData.name || userData.Name || userName;
+            } else {
+              username = data.userId;
             }
-          }).catch(err => {
-            console.error('Error fetching user data:', err);
+          } catch (err) {
+            console.error('Error fetching user data for payment:', err);
             username = data.userId;
-          });
+          }
         }
 
         usersData.push({
           id: paymentDoc.id,
-          name: data.userName || 'N/A',
+          name: userName,
           username: username,
-          address: 'Payment Record',
-          startDate: data.date || 'N/A',
+          address: userAddress,
+          startDate: data.date || 'N/A', // Keep payment date as start date
           totalAmount: data.amount || 0,
           balance: data.balance || 0,
           isPaid: data.isPaid || false,
           monthlyFees: 0,
-          package: 'Payment',
+          package: userPackage,
           phone: 'N/A',
           totalPayment: data.amount || 0,
           recordType: 'payment',
           ...data
         });
-      });
+      }
 
       setUsers(usersData);
     } catch (error) {
@@ -458,7 +480,7 @@ export default function UploadEntrySearchTable() {
     try {
       // Update the user's balance in the uploadEntry collection
       const userDocRef = doc(db, 'uploadEntry', selectedUser.id);
-      
+
       let newBalance = selectedUser.balance;
       let newMonthlyFees = selectedUser.monthlyFees || 0;
       let isPaid = false;
@@ -569,7 +591,7 @@ export default function UploadEntrySearchTable() {
     try {
       // Update the user's data in the uploadEntry collection
       const userDocRef = doc(db, 'uploadEntry', selectedUser.id);
-      
+
       // Calculate new values based on the entered amounts
       const newBalance = selectedUser.balance - totalPaymentAmount;
       const isPaid = newBalance <= 0;
@@ -760,7 +782,7 @@ export default function UploadEntrySearchTable() {
     try {
       // Update the user's balance in the uploadEntry collection
       const userDocRef = doc(db, 'uploadEntry', selectedUser.id);
-      
+
       let newBalance = selectedUser.balance;
       let newMonthlyFees = selectedUser.monthlyFees || 0;
       let isPaid = false;
@@ -872,7 +894,7 @@ export default function UploadEntrySearchTable() {
               className="w-full pr-10"
             />
           </div>
-          
+
           <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
             <div>
               <Text size="sm" className="mb-1 text-gray-600 font-medium">Start Date</Text>
@@ -899,7 +921,7 @@ export default function UploadEntrySearchTable() {
               />
             </div>
           </div>
-          
+
           <Button
             onClick={() => setIsNewUserModalOpen(true)}
             className="bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white flex items-center justify-center gap-2 h-[44px] rounded-lg shadow-md transition-all duration-200"
@@ -1558,7 +1580,7 @@ export default function UploadEntrySearchTable() {
                 onChange={(e) => {
                   const payment = parseFloat(e.currentTarget.value) || 0;
                   setTotalPaymentAmount(payment);
-                  
+
                   // Calculate new balance based on current balance minus payment
                   const newCalculatedBalance = selectedUser.balance - payment;
                   setTotalBalance(Math.max(0, newCalculatedBalance)); // Ensure balance doesn't go negative
