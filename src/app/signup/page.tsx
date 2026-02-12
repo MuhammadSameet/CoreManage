@@ -84,7 +84,8 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="flex min-h-screen w-full bg-white">
+    <div className="flex h-[100vh] w-full bg-white">
+      {/* <div className="flex min-h-screen w-full bg-white"> */}
       <div className="hidden lg:flex lg:w-[42%] min-h-screen bg-[#1e40af] p-10 flex-col justify-center">
         <div className="max-w-sm mx-auto w-full">
           <Group gap="xs" mb="xl">
@@ -112,16 +113,16 @@ export default function SignupPage() {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-8 bg-white overflow-auto">
+      <div className="flex-1 flex flex-col items-center justify-center py-6 sm:p-8 bg-white overflow-auto">
         <div className="w-full max-w-[320px] py-4">
-          <div className="text-center lg:text-left mb-6">
+          <div className="text-center lg:text-left mb-3">
             <div className="lg:hidden flex justify-center mb-4">
               <Box className="w-9 h-9 rounded-lg bg-[#6366f1] flex items-center justify-center">
                 <Image src="/image/logo.png" alt="CoreManage" width={22} height={22} className="object-contain opacity-90" />
               </Box>
             </div>
             <Text className="font-bold text-gray-800" style={{ fontSize: 'var(--text-xl)' }}>Create account</Text>
-            <Text className="text-gray-500 mt-0.5" style={{ fontSize: 'var(--text-sm)' }}>Fill in your details</Text>
+            {/* <Text className="text-gray-500 mt-0.5" style={{ fontSize: 'var(--text-sm)' }}>Fill in your details</Text> */}
           </div>
 
           <form onSubmit={signUpHandler}>
@@ -132,7 +133,7 @@ export default function SignupPage() {
                 required
                 value={formStates.name}
                 onChange={(e) => setFormStates((prev) => ({ ...prev, name: e.target.value }))}
-                leftSection={<IconUser size={18} className="text-gray-400" />}
+                // leftSection={<IconUser size={18} className="text-gray-400" />}
                 size="md"
                 radius="md"
               />
@@ -143,7 +144,7 @@ export default function SignupPage() {
                 type="email"
                 value={formStates.email}
                 onChange={(e) => setFormStates((prev) => ({ ...prev, email: e.target.value }))}
-                leftSection={<IconAt size={18} className="text-gray-400" />}
+                // leftSection={<IconAt size={18} className="text-gray-400" />}
                 size="md"
                 radius="md"
               />
@@ -153,7 +154,7 @@ export default function SignupPage() {
                 required
                 value={formStates.username}
                 onChange={(e) => setFormStates((prev) => ({ ...prev, username: e.target.value }))}
-                leftSection={<IconUser size={18} className="text-gray-400" />}
+                // leftSection={<IconUser size={18} className="text-gray-400" />}
                 size="md"
                 radius="md"
               />
@@ -163,7 +164,7 @@ export default function SignupPage() {
                 required
                 value={formStates.password}
                 onChange={(e) => setFormStates((prev) => ({ ...prev, password: e.target.value }))}
-                leftSection={<IconLock size={18} className="text-gray-400" />}
+                // leftSection={<IconLock size={18} className="text-gray-400" />}
                 size="md"
                 radius="md"
               />
@@ -194,7 +195,7 @@ export default function SignupPage() {
             </Stack>
           </form>
 
-          <Text className="text-center text-sm text-gray-500 mt-6">
+          <Text className="text-center text-sm text-gray-500 mt-3">
             Already have an account?{' '}
             <Anchor component={Link} href="/login" className="text-[#6366f1] font-semibold">
               Sign in

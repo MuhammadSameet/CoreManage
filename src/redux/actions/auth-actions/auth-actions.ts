@@ -27,8 +27,8 @@ function getSignUpErrorMessage(err: unknown): string {
   return 'Could not create account. Please try again.';
 }
 
-// Note: Sign up user - ONLY in Users collection (do NOT create in uploadEntry or any other collection)
-const signUpUser = (userData: UserData) => {
+// Note: Sign up user
+const signUpUser = (userData: UserData, avoidLogin: boolean = false) => {
   return async (dispatch: AppDispatch) => {
     try {
       const createUser = await createUserWithEmailAndPassword(
@@ -50,20 +50,27 @@ const signUpUser = (userData: UserData) => {
       if (createUser) {
         await setDoc(doc(db, "Users", createUser.user.uid), saveUserData);
 
-        const userToken = await createUser.user.getIdToken();
-        if (userToken) {
-          setCookie('token', userToken);
-          dispatch(LOGIN_USER({
-            email: createUser.user.email,
-            uid: createUser.user.uid,
-            name: userData.name || null,
-            role: userData.role || 'user',
-            username: saveUserData.username
-          }));
+        if (!avoidLogin) {
+          const userToken = await createUser.user.getIdToken();
+          if (userToken) {
+            setCookie('token', userToken);
+            dispatch(LOGIN_USER({
+              email: createUser.user.email,
+              uid: createUser.user.uid,
+              name: userData.name || null,
+              role: userData.role || 'user',
+              username: saveUserData.username
+            }));
+          }
+          await dispatch(fetchAllUsers());
+          window.location.href = '/login';
+        } else {
+          // If avoidLogin is true, we should probably sign out the newly created user 
+          // to prevent the current session from being affected, though this is tricky on client-side.
+          // However, in many cases, we might need a cloud function for true admin creation.
+          // For now, let's at least skip the Redux state change and cookie setting.
+          await dispatch(fetchAllUsers());
         }
-
-        await dispatch(fetchAllUsers());
-        window.location.href = '/login';
       }
     } catch (error: unknown) {
       throw new Error(getSignUpErrorMessage(error));

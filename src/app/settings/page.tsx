@@ -18,7 +18,7 @@ import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { reauthenticateWithCredential, EmailAuthProvider, updatePassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { notifications } from '@mantine/notifications';
+import { toast } from 'react-toastify';
 import { CreationModals } from '@/components/dashboard/CreationModals';
 
 const Text = MantineText;
@@ -89,16 +89,16 @@ export default function SettingsPage() {
     const handleChangePassword = async (e: React.FormEvent) => {
         e.preventDefault();
         if (newPassword !== confirmPassword) {
-            notifications.show({ title: 'Error', message: 'New passwords do not match.', color: 'red', position: 'top-right' });
+            toast.error('New passwords do not match.');
             return;
         }
         if (newPassword.length < 6) {
-            notifications.show({ title: 'Error', message: 'Password must be at least 6 characters.', color: 'red', position: 'top-right' });
+            toast.error('Password must be at least 6 characters.');
             return;
         }
         const user = auth.currentUser;
         if (!user?.email) {
-            notifications.show({ title: 'Error', message: 'You must be signed in to change password.', color: 'red', position: 'top-right' });
+            toast.error('You must be signed in to change password.');
             return;
         }
         setChangingPassword(true);
@@ -109,13 +109,13 @@ export default function SettingsPage() {
             setCurrentPassword('');
             setNewPassword('');
             setConfirmPassword('');
-            notifications.show({ title: 'Password updated', message: 'Your password has been changed.', color: 'green', position: 'top-right' });
+            toast.success('Your password has been updated!');
         } catch (err: unknown) {
             const msg = (err as Error)?.message || '';
             if (msg.includes('wrong-password') || msg.includes('invalid-credential')) {
-                notifications.show({ title: 'Error', message: 'Current password is incorrect.', color: 'red', position: 'top-right' });
+                toast.error('Current password is incorrect.');
             } else {
-                notifications.show({ title: 'Error', message: 'Could not update password. Try again.', color: 'red', position: 'top-right' });
+                toast.error('Could not update password. Try again.');
             }
         } finally {
             setChangingPassword(false);
@@ -182,7 +182,13 @@ export default function SettingsPage() {
                             onChange={(e) => setConfirmPassword(e.target.value)}
                             radius="md"
                         />
-                        <Button type="submit" className="bg-[#6366f1] hover:bg-[#4f46e5] font-semibold" radius="md" size="md" loading={changingPassword}>
+                        <Button
+                            type="submit"
+                            className="bg-blue-600 hover:bg-blue-700 font-semibold h-[46px] transition-all active:scale-[0.98]"
+                            radius="md"
+                            size="md"
+                            loading={changingPassword}
+                        >
                             Update password
                         </Button>
                     </Stack>

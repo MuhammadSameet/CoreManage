@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
-import { BarChart, PieChart } from '@mantine/charts';
-import { Paper, Text, Loader, Stack } from '@mantine/core';
+import React, { useEffect, useState } from 'react';
+import { LineChart } from '@mantine/charts';
+import { Paper, Text, Loader, Stack, Group, Badge } from '@mantine/core';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { IconChartLine } from '@tabler/icons-react';
 
 const formatter = new Intl.NumberFormat('en-PK', {
   style: 'decimal',
@@ -12,36 +13,35 @@ const formatter = new Intl.NumberFormat('en-PK', {
   maximumFractionDigits: 0,
 });
 
-function getWeekKey(date: Date): string {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(d.setDate(diff));
-  return monday.toISOString().slice(0, 10);
+function getDayKey(date: Date): string {
+  return date.toISOString().slice(0, 10);
 }
 
-function getWeekLabel(weekKey: string): string {
-  const d = new Date(weekKey);
-  return `Wk ${d.getDate()}/${d.getMonth() + 1}`;
+function getDayLabel(dateKey: string): string {
+  const d = new Date(dateKey);
+  return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
 }
 
 export function DashboardCharts() {
   const [loading, setLoading] = useState(true);
-  const [weeklyData, setWeeklyData] = useState<{ week: string; Paid: number; Unpaid: number; Total: number }[]>([]);
-  const [totals, setTotals] = useState({ paid: 0, unpaid: 0, total: 0 });
+  const [dailyData, setDailyData] = useState<{ day: string; Paid: number; Unpaid: number; Total: number }[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const paymentsSnap = await getDocs(collection(db, 'payments'));
-        const paymentsByWeek: Record<string, number> = {};
-        let totalPaidToday = 0;
+        setLoading(true);
+        // Step 1: Generate last 7 days keys (including today)
+        const last7Days: string[] = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          last7Days.push(getDayKey(d));
+        }
 
-        const now = new Date();
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-        const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+        // Step 2: Fetch Payments for "Paid" metrics
+        const paymentsSnap = await getDocs(collection(db, 'payments'));
+        const paidByDay: Record<string, number> = {};
 
         paymentsSnap.docs.forEach((docSnap) => {
           const d = docSnap.data();
@@ -51,52 +51,68 @@ export function DashboardCharts() {
           const date = typeof dateVal === 'string' ? new Date(dateVal) : dateVal?.seconds ? new Date(dateVal.seconds * 1000) : null;
           if (!date || isNaN(date.getTime())) return;
 
-          const key = getWeekKey(date);
-          paymentsByWeek[key] = (paymentsByWeek[key] || 0) + amount;
-
-          const timestamp = date.getTime();
-          if (timestamp >= startOfToday && timestamp <= endOfToday) {
-            totalPaidToday += amount;
+          const key = getDayKey(date);
+          if (last7Days.includes(key)) {
+            paidByDay[key] = (paidByDay[key] || 0) + amount;
           }
         });
 
+        // Step 3: Fetch balances for "Unpaid" metrics
         const uploadEntrySnap = await getDocs(collection(db, 'uploadEntry'));
-        let totalUnpaidToday = 0;
+        const unpaidByDay: Record<string, number> = {};
 
         uploadEntrySnap.docs.forEach((docSnap) => {
           const d = docSnap.data();
-          const balance = typeof d.balance === 'number' ? d.balance : parseFloat(d.balance) || 0;
 
-          // User wants "Today Distribution (1 Day)" for both. 
-          // For unpaid, we show current outstanding balances as they are "unpaid as of today".
-          totalUnpaidToday += balance;
+          // Match stats-actions logic for finding original amount
+          const potentialAmountFields = [
+            d.Total, d.total, d.Amount, d.amount, d['Total Amount'], d.totalAmount, d.TotalAmount,
+            d.total_amount, d.Total_Amount, d.payment, d.Payment, d.paymentAmount, d.PaymentAmount,
+            d.payment_amount, d.Payment_Amount, d.fee, d.Fee, d.fees, d.Fees, d.Price, d.price
+          ];
+          let originalAmount = 0;
+          for (const field of potentialAmountFields) {
+            if (field !== undefined && field !== null) {
+              const parsed = typeof field === 'number' ? field : typeof field === 'string' ? parseFloat(field) || 0 : Number(field) || 0;
+              if (parsed !== 0) { originalAmount = parsed; break; }
+            }
+          }
+          if (originalAmount === 0) {
+            originalAmount = typeof d.monthlyFees === 'number' ? d.monthlyFees : 0;
+          }
+
+          // For the chart, we'll assign the original amount to the day the record was created/updated
+          const dateVal = d.uploadedAt || d.createdAt || d.date;
+          if (!dateVal) return;
+          const date = typeof dateVal === 'string' ? new Date(dateVal) : dateVal?.seconds ? new Date(dateVal.seconds * 1000) : null;
+          if (!date || isNaN(date.getTime())) return;
+
+          const key = getDayKey(date);
+          if (last7Days.includes(key)) {
+            unpaidByDay[key] = (unpaidByDay[key] || 0) + originalAmount;
+          }
         });
 
         if (cancelled) return;
 
-        const sortedWeeks = Object.keys(paymentsByWeek).sort();
-        const last6 = sortedWeeks.slice(-6);
-        if (last6.length === 0) {
-          for (let i = 5; i >= 0; i--) {
-            const w = new Date(now);
-            w.setDate(w.getDate() - 7 * i);
-            last6.push(getWeekKey(w));
-          }
-        }
+        // Step 4: Format Line Chart Data
+        const chartData = last7Days.map((key) => {
+          const paid = Math.round(paidByDay[key] || 0);
+          const unpaid = Math.round(unpaidByDay[key] || 0);
+          return {
+            day: getDayLabel(key),
+            Paid: paid,
+            Unpaid: unpaid,
+            Total: paid + unpaid,
+          };
+        });
 
-        const barData = last6.map((key) => ({
-          week: getWeekLabel(key),
-          Paid: Math.round(paymentsByWeek[key] || 0),
-          Unpaid: key === last6[last6.length - 1] ? Math.round(totalUnpaidToday) : 0,
-          Total: Math.round((paymentsByWeek[key] || 0) + (key === last6[last6.length - 1] ? totalUnpaidToday : 0)),
-        }));
+        setDailyData(chartData);
 
-        setWeeklyData(barData);
-        setTotals({ paid: totalPaidToday, unpaid: totalUnpaidToday, total: totalPaidToday + totalUnpaidToday });
-      } catch {
+      } catch (error) {
+        console.error("Dashboard parse error:", error);
         if (!cancelled) {
-          setWeeklyData([]);
-          setTotals({ paid: 0, unpaid: 0, total: 0 });
+          setDailyData([]);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -106,70 +122,49 @@ export function DashboardCharts() {
     return () => { cancelled = true; };
   }, []);
 
-  const pieData = useMemo(() => {
-    const items = [
-      { name: 'Paid Today', value: totals.paid, color: 'blue.6' },
-      { name: 'Unpaid Today', value: totals.unpaid, color: 'orange.6' },
-      { name: 'Total Status', value: totals.total, color: 'teal.6' },
-    ].filter((d) => d.value > 0);
-
-    if (items.length === 0) {
-      return [
-        { name: 'No Data', value: 1, color: 'gray.4' },
-      ];
-    }
-    return items;
-  }, [totals]);
-
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader size="md" />
+      <div className="flex items-center justify-center py-20">
+        <Loader size="xl" variant="bars" color="blue" />
       </div>
     );
   }
 
   return (
     <Stack gap="xl" className="w-full">
-      <div className="flex flex-col lg:flex-row gap-6 w-full">
-        <Paper p="xl" radius="lg" withBorder className="flex-[1.8] min-w-0 border-gray-100 shadow-sm bg-white">
-          <Text size="lg" fw={700} c="gray.8" mb="xl">
-            Weekly Payments Overview
-          </Text>
-          <BarChart
-            h={350}
-            data={weeklyData}
-            dataKey="week"
+      <Paper p="xl" radius="lg" withBorder className="w-full border-gray-100 shadow-md bg-white">
+        <Group justify="space-between" mb="xl">
+          <Group gap="sm">
+            <IconChartLine size={24} className="text-blue-600" />
+            <Text size="lg" fw={700} className="text-gray-800">
+              7-Day Financial Overview
+            </Text>
+          </Group>
+          <Badge variant="light" color="blue" size="lg" radius="sm">Last 7 Days (Daily)</Badge>
+        </Group>
+
+        <div className="h-[400px] w-full">
+          <LineChart
+            h={400}
+            data={dailyData}
+            dataKey="day"
+            withLegend
+            legendProps={{ verticalAlign: 'bottom', height: 40 }}
             series={[
-              { name: 'Paid', color: 'violet.6' },
-              { name: 'Unpaid', color: 'blue.6' },
-              { name: 'Total', color: 'teal.6' },
+              { name: 'Paid', color: 'green.6' },
+              { name: 'Unpaid', color: 'orange.6' },
+              { name: 'Total', color: 'blue.6' },
             ]}
-            valueFormatter={(value) => formatter.format(value)}
-            withBarValueLabel
-            tickLine="none"
+            curveType="monotone"
+            valueFormatter={(value) => `Rs. ${formatter.format(value)}`}
+            tickLine="xy"
             gridAxis="xy"
-            style={{ maxWidth: '100%' }}
+            withDots={true}
+            dotProps={{ r: 4 }}
+            activeDotProps={{ r: 6 }}
           />
-        </Paper>
-        <Paper p="xl" radius="lg" withBorder className="flex-1 min-w-0 border-gray-100 shadow-sm bg-white">
-          <Text size="lg" fw={700} c="gray.8" mb="xl">
-            Today Distribution (1 Day)
-          </Text>
-          <div className="flex justify-center items-center h-[350px]">
-            <PieChart
-              data={pieData}
-              withLabelsLine
-              size={200}
-              withLabels
-              labelsPosition="outside"
-              labelsType="value"
-              valueFormatter={(value) => formatter.format(value)}
-              strokeWidth={2}
-            />
-          </div>
-        </Paper>
-      </div>
+        </div>
+      </Paper>
     </Stack>
   );
 }

@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Button, TextInput, Card, Text, Badge, LoadingOverlay, Table, Paper, ActionIcon, Modal, Input, Group, Divider } from '@mantine/core';
+import { Button, TextInput, Card, Text, Badge, LoadingOverlay, Table, Paper, Modal, Input, Group, Divider } from '@mantine/core';
 import { DatePickerInput, DatesRangeValue } from '@mantine/dates';
-import { IconSearch, IconPencil, IconX, IconCalendar, IconCoin, IconUser, IconId } from '@tabler/icons-react';
+import { IconSearch, IconPencil, IconX, IconCalendar, IconCoin, IconUser, IconId, IconDotsVertical, IconTrash, IconPrinter } from '@tabler/icons-react';
+import { Menu, ActionIcon, rem } from '@mantine/core';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, orderBy, doc, updateDoc } from 'firebase/firestore';
 import dayjs from 'dayjs';
@@ -55,7 +56,7 @@ export default function PaymentsPage() {
 
       querySnapshot.forEach((doc) => {
         const data = doc.data() as RawPaymentData;
-        
+
         // Handle date conversion properly
         let convertedDate: Date;
         if (data.date && typeof data.date.toDate === 'function') {
@@ -71,10 +72,10 @@ export default function PaymentsPage() {
           // Default to current date
           convertedDate = new Date();
         }
-        
+
         // Create a copy of data without the id field to avoid conflicts
         const { id, ...restData } = data;
-        
+
         paymentsData.push({
           id: doc.id,
           userId: data.userId || 'N/A',
@@ -108,10 +109,10 @@ export default function PaymentsPage() {
   // Apply filters to payments
   useEffect(() => {
     let result = [...payments];
-    
+
     // Apply search term filter
     if (searchTerm) {
-      result = result.filter(payment => 
+      result = result.filter(payment =>
         payment.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         payment.userId.toLowerCase().includes(searchTerm.toLowerCase()) ||
         payment.amount.toString().includes(searchTerm.toLowerCase()) ||
@@ -119,7 +120,7 @@ export default function PaymentsPage() {
         payment.newBalance.toString().includes(searchTerm.toLowerCase())
       );
     }
-    
+
     // Apply date range filter
     if (dateRange[0] && dateRange[1]) {
       const startDate = dayjs(dateRange[0]).startOf('day').toDate();
@@ -130,14 +131,14 @@ export default function PaymentsPage() {
         return paymentDate >= startDate && paymentDate <= endDate;
       });
     }
-    
+
     // Apply paid by name filter
     if (paidByFilter) {
-      result = result.filter(payment => 
+      result = result.filter(payment =>
         payment.userName.toLowerCase().includes(paidByFilter.toLowerCase())
       );
     }
-    
+
     setFilteredPayments(result);
   }, [searchTerm, dateRange, paidByFilter, payments]);
 
@@ -169,7 +170,7 @@ export default function PaymentsPage() {
               />
             </div>
           </div>
-          
+
           <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-1/3">
             <DatePickerInput
               type="range"
@@ -181,7 +182,7 @@ export default function PaymentsPage() {
               clearable
               className="flex-1"
             />
-            
+
             <TextInput
               value={paidByFilter}
               onChange={(e) => setPaidByFilter(e.target.value)}
@@ -202,7 +203,7 @@ export default function PaymentsPage() {
             Showing {filteredPayments.length} payment{filteredPayments.length !== 1 ? 's' : ''}
           </Text>
         </div>
-        
+
         <Paper radius="md" withBorder className="overflow-hidden border-gray-100 shadow-sm">
           <Table verticalSpacing="md" horizontalSpacing="xl" className="min-w-full">
             <Table.Thead className="bg-gray-50/50">
@@ -214,6 +215,7 @@ export default function PaymentsPage() {
                 <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">Payment Method</Table.Th>
                 <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">Paid ID</Table.Th>
                 <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">Status</Table.Th>
+                <Table.Th className="text-gray-400 font-bold text-[10px] uppercase">Actions</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -255,8 +257,8 @@ export default function PaymentsPage() {
                       <Badge
                         variant="light"
                         color={
-                          payment.method === 'cash' ? 'blue' : 
-                          payment.method === 'bank' ? 'green' : 'orange'
+                          payment.method === 'cash' ? 'blue' :
+                            payment.method === 'bank' ? 'green' : 'orange'
                         }
                         radius="sm"
                         className="font-bold py-3"
@@ -279,6 +281,43 @@ export default function PaymentsPage() {
                       >
                         {payment.isPaid ? 'PAID' : 'PARTIAL'}
                       </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Menu shadow="md" width={160} position="bottom-end">
+                        <Menu.Target>
+                          <ActionIcon
+                            variant="subtle"
+                            color="gray"
+                            size="lg"
+                            className="rounded-full hover:bg-gray-100 hover:text-[#00A5A8] transition-all duration-200"
+                          >
+                            <IconDotsVertical size={20} />
+                          </ActionIcon>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                          <Menu.Label>Actions</Menu.Label>
+                          <Menu.Item
+                            leftSection={<IconPencil style={{ width: rem(14), height: rem(14) }} />}
+                            onClick={() => {/* Edit logic */ }}
+                          >
+                            Edit Payment
+                          </Menu.Item>
+                          <Menu.Item
+                            color="red"
+                            leftSection={<IconTrash style={{ width: rem(14), height: rem(14) }} />}
+                            onClick={() => {/* Delete logic */ }}
+                          >
+                            Delete Payment
+                          </Menu.Item>
+                          <Menu.Divider />
+                          <Menu.Item
+                            leftSection={<IconPrinter style={{ width: rem(14), height: rem(14) }} />}
+                            onClick={() => window.print()}
+                          >
+                            Print Invoice
+                          </Menu.Item>
+                        </Menu.Dropdown>
+                      </Menu>
                     </Table.Td>
                   </Table.Tr>
                 ))

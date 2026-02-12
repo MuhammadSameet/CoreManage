@@ -4,8 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/redux/store';
 import { fetchAllUsers } from '@/redux/actions/user-actions/user-actions';
-import { Title, Text, Paper, Stack, Table, Badge, ActionIcon, Group, Button, Modal, TextInput, Select } from '@mantine/core';
-import { IconEdit } from '@tabler/icons-react';
+import { Title, Text, Paper, Stack, Table, Badge, ActionIcon, Group, Button, Modal, TextInput, Select, Menu, rem } from '@mantine/core';
+import { IconEdit, IconDotsVertical, IconTrash } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -92,9 +92,34 @@ export default function RolesPage() {
                   </Table.Td>
                   <Table.Td className="py-3">
                     <Group gap="xs" justify="flex-end">
-                      <ActionIcon variant="light" color="blue" onClick={() => openEdit(row)} className="rounded-md">
-                        <IconEdit size={18} />
-                      </ActionIcon>
+                      <Menu shadow="md" width={160} position="bottom-end" withArrow>
+                        <Menu.Target>
+                          <ActionIcon
+                            variant="subtle"
+                            color="gray"
+                            size="lg"
+                            className="rounded-full hover:bg-gray-100 hover:text-[#00A5A8] transition-all duration-200"
+                          >
+                            <IconDotsVertical size={20} />
+                          </ActionIcon>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                          <Menu.Label>Management</Menu.Label>
+                          <Menu.Item
+                            leftSection={<IconEdit style={{ width: rem(14), height: rem(14) }} />}
+                            onClick={() => openEdit(row)}
+                          >
+                            Edit User
+                          </Menu.Item>
+                          <Menu.Item
+                            color="red"
+                            leftSection={<IconTrash style={{ width: rem(14), height: rem(14) }} />}
+                            onClick={() => {/* Add delete logic if needed or just leave as placeholder */ }}
+                          >
+                            Delete User
+                          </Menu.Item>
+                        </Menu.Dropdown>
+                      </Menu>
                     </Group>
                   </Table.Td>
                 </Table.Tr>
@@ -123,7 +148,7 @@ export default function RolesPage() {
         </>
       )}
 
-      <Modal opened={!!editing} onClose={() => setEditing(null)} title="Edit user">
+      <Modal opened={!!editing} onClose={() => setEditing(null)} title="Edit user" centered radius="md" withCloseButton styles={{ close: { color: '#6366f1', scale: 1.2 } }}>
         {editing && (
           <Stack gap="md">
             <TextInput label="Name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />

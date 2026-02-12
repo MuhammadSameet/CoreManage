@@ -35,6 +35,10 @@ import {
 // User Section Import
 import { UserSection } from './UserSection';
 import { CreationModals } from '@/components/dashboard/CreationModals';
+import logoIcon from '@/assets/images/logo.jpg';
+import Image from 'next/image';
+import { Menu as MenuIcon, Close as CloseIcon } from '@mui/icons-material';
+import { IconMenu2, IconX } from '@tabler/icons-react';
 
 const drawerWidth = 280;
 const closedDrawerWidth = 80;
@@ -98,6 +102,7 @@ const DrawerHeader = styled('div')(({ theme }) => ({
   justifyContent: 'space-between',
   padding: theme.spacing(0, 2.5),
   minHeight: 80,
+  backgroundColor: '#1e40af', // Blue background matching Signup
   ...theme.mixins.toolbar,
 }));
 
@@ -175,25 +180,37 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
     <Box sx={{ display: 'flex' }}>
       <Drawer variant="permanent" open={open}>
         <DrawerHeader>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, opacity: open ? 1 : 0, transition: 'opacity 0.2s' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, opacity: open ? 1 : 0, transition: 'opacity 0.2s', pl: 0.5 }}>
             <Box sx={{
-              width: 36,
-              height: 36,
-              borderRadius: '10px',
-              bgcolor: COLORS.primary,
+              width: 38,
+              height: 38,
+              borderRadius: '8px',
+              bgcolor: 'white',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)'
+              overflow: 'hidden',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+              p: 0.5
             }}>
-              <DashboardIcon sx={{ color: 'white', fontSize: 20 }} />
+              <Image src={logoIcon} alt="Logo" width={30} height={30} className="object-contain" />
             </Box>
-            <Typography variant="h6" sx={{ fontWeight: 900, color: '#0f172a', fontSize: '1.2rem', letterSpacing: '-0.02em' }}>
-              CoreManage
+            <Typography variant="h6" sx={{ fontWeight: 800, fontSize: '1.2rem', letterSpacing: '-0.02em', display: 'flex' }}>
+              <span style={{ color: 'white' }}>Core</span>
+              <span style={{ color: '#0f172a' }}>Manage</span>
             </Typography>
           </Box>
-          <IconButton onClick={() => setOpen(!open)} sx={{ color: COLORS.textMain }}>
-            {open ? <ChevronLeftIcon /> : <ChevronRightIcon />}
+          <IconButton
+            onClick={() => setOpen(!open)}
+            sx={{
+              color: 'white',
+              bgcolor: 'rgba(255, 255, 255, 0.15)',
+              '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.25)' },
+              borderRadius: '8px',
+              p: 0.8
+            }}
+          >
+            {open ? <IconX size={20} /> : <IconMenu2 size={20} />}
           </IconButton>
         </DrawerHeader>
 

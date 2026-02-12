@@ -355,38 +355,38 @@ export function NewUploadEntryClient() {
                                 setParsedData([]);
                             }}
                             placeholder="Upload CSV or Excel file"
-                            leftSection={<IconFileSpreadsheet size={18} />}
+                            // leftSection={<IconFileSpreadsheet size={18} />}
                             accept=".csv,.xlsx,.xls"
                             radius="md"
                             size="md"
                             classNames={{
                                 root: 'w-full',
-                                input: 'min-h-[2.75rem] border-[#1e40af]',
+                                input: 'h-[46px] border-[#1e40af] focus:border-[#1e40af] focus:ring-1 focus:ring-[#1e40af]',
                             }}
                         />
                     </div>
 
                     <Flex gap="sm" className="w-full sm:w-auto mt-2 sm:mt-0">
                         <Button
-                            leftSection={<IconEye size={16} />}
-                            radius="lg"
+                            leftSection={<IconEye size={18} />}
+                            radius="md"
                             size="md"
                             disabled={!file || loading}
                             onClick={handlePreview}
-                            className="w-full sm:w-auto h-[46px] bg-[#1e40af] hover:bg-[#1e3a8a] text-white shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200 disabled:bg-gray-400 disabled:shadow-none disabled:cursor-not-allowed"
+                            className={`w-full sm:w-auto h-[48px] px-8 font-bold border-none transition-all duration-200 active:scale-95 ${!file || loading ? 'bg-gray-200 text-gray-400' : 'bg-gradient-to-r from-[#00A5A8] to-[#25C4DD] text-white shadow-md hover:shadow-lg hover:brightness-110'}`}
                         >
-                            {loading && !showPreview ? 'Loading...' : 'Preview'}
+                            {loading && !showPreview ? 'Loading...' : 'Preview Data'}
                         </Button>
 
                         <Button
-                            leftSection={<IconUpload size={16} />}
-                            radius="lg"
+                            leftSection={<IconUpload size={18} />}
+                            radius="md"
                             size="md"
                             disabled={parsedData.length === 0 || loading}
                             onClick={handleSubmit}
-                            className="w-full sm:w-auto h-[46px] bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200 disabled:bg-gray-400 disabled:shadow-none disabled:cursor-not-allowed"
+                            className={`w-full sm:w-auto h-[48px] px-8 font-bold border-none transition-all duration-200 active:scale-95 ${parsedData.length === 0 || loading ? 'bg-gray-200 text-gray-400' : 'bg-gradient-to-r from-[#10C888] to-[#58E1B5] text-white shadow-md hover:shadow-lg hover:brightness-110'}`}
                         >
-                            {loading && showPreview ? 'Uploading...' : 'Submit'}
+                            {loading && showPreview ? 'Uploading...' : 'Submit Records'}
                         </Button>
                     </Flex>
                 </Flex>
@@ -412,88 +412,88 @@ export function NewUploadEntryClient() {
                     </div>
 
                     {/* Responsive table container - Always show table with horizontal scrolling */}
-                    <div className="border border-gray-200 rounded-lg overflow-hidden w-full">
-                        <div className="overflow-x-auto overflow-y-visible">
-                            <Paper radius="md" withBorder className="overflow-hidden border-0 border-b border-gray-100 shadow-sm w-full">
-                                <Table verticalSpacing="md" horizontalSpacing="lg" className="w-full min-w-max">
-                                    <Table.Thead className="bg-gray-50/50">
-                                        <Table.Tr>
-                                            <Table.Th className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[40px] xs:min-w-[50px] sm:min-w-[60px]">#</Table.Th>
-                                            {getFilteredColumns().map((key) => (
-                                                <Table.Th key={key} className="text-gray-400 font-bold text-[10px] uppercase tracking-wider border-b border-gray-200 py-2 min-w-[80px] xs:min-w-[90px] sm:min-w-[100px]">
-                                                    {key}
-                                                </Table.Th>
-                                            ))}
-                                        </Table.Tr>
-                                    </Table.Thead>
-                                    <Table.Tbody>
-                                        {getDisplayData().slice(0, 50).map((row, index) => (
-                                            <Table.Tr
-                                                key={index}
-                                                className="hover:bg-gray-50/50 transition-colors border-b border-gray-100 last:border-b-0"
-                                            >
-                                                <Table.Td className="font-bold text-blue-600 py-2 px-1 xs:px-2 sm:px-4 min-w-[40px] xs:min-w-[50px] sm:min-w-[60px]">
-                                                    {index + 1}
-                                                </Table.Td>
-                                                {getFilteredColumns().map((key) => {
-                                                    const value = row[key as keyof typeof row];
+                    <div className="w-full overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+                        <Paper radius="lg" withBorder className="overflow-hidden border-gray-100 shadow-sm min-w-[1000px]">
+                            <Table verticalSpacing="md" horizontalSpacing="lg" className="min-w-full">
+                                <Table.Thead className="bg-gray-50/50">
+                                    <Table.Tr>
+                                        <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 py-4" style={{ fontSize: 'var(--text-sm)' }}>
+                                            #
+                                        </Table.Th>
+                                        {getFilteredColumns().map((key) => (
+                                            <Table.Th key={key} className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 py-4" style={{ fontSize: 'var(--text-sm)' }}>
+                                                {key}
+                                            </Table.Th>
+                                        ))}
+                                    </Table.Tr>
+                                </Table.Thead>
+                                <Table.Tbody>
+                                    {getDisplayData().slice(0, 50).map((row, index) => (
+                                        <Table.Tr
+                                            key={index}
+                                            className="hover:bg-gray-50/50 transition-colors border-b border-gray-100 last:border-b-0"
+                                        >
+                                            <Table.Td className="font-bold text-blue-600 py-2 px-1 xs:px-2 sm:px-4 min-w-[40px] xs:min-w-[50px] sm:min-w-[60px]">
+                                                {index + 1}
+                                            </Table.Td>
+                                            {getFilteredColumns().map((key) => {
+                                                const value = row[key as keyof typeof row];
 
-                                                    // Special formatting for isPaid/status
-                                                    if (key.toLowerCase() === 'ispaid' || key.toLowerCase() === 'status') {
-                                                        return (
-                                                            <Table.Td key={key} className="py-2 px-1 xs:px-2 sm:px-4 min-w-[80px] xs:min-w-[90px] sm:min-w-[100px] truncate">
-                                                                <StatusBadge status={String(value)} />
-                                                            </Table.Td>
-                                                        );
-                                                    }
-
-                                                    // Money fields
-                                                    if (key.toLowerCase().includes('fee') || key.toLowerCase().includes('payment') || key.toLowerCase().includes('amount') || key.toLowerCase().includes('balance')) {
-                                                        return (
-                                                            <Table.Td key={key} className="py-2 px-1 xs:px-2 sm:px-4 min-w-[80px] xs:min-w-[90px] sm:min-w-[100px] truncate">
-                                                                <div className="flex items-center gap-1">
-                                                                    <span className="text-xs text-gray-400">Rs.</span>
-                                                                    <span className="font-bold text-gray-900 text-sm">{value || '0'}</span>
-                                                                </div>
-                                                            </Table.Td>
-                                                        );
-                                                    }
-
-                                                    // Name/ID fields
-                                                    if (key.toLowerCase().includes('name') || key.toLowerCase().includes('user') || key.toLowerCase().includes('id')) {
-                                                        return (
-                                                            <Table.Td key={key} className="py-2 px-1 xs:px-2 sm:px-4 min-w-[80px] xs:min-w-[90px] sm:min-w-[100px] truncate">
-                                                                <Text size="sm" fw={600} className="text-gray-800">
-                                                                    {value || 'N/A'}
-                                                                </Text>
-                                                            </Table.Td>
-                                                        );
-                                                    }
-
-                                                    // Date fields
-                                                    if (key.toLowerCase().includes('date')) {
-                                                        return (
-                                                            <Table.Td key={key} className="py-2 px-1 xs:px-2 sm:px-4 min-w-[80px] xs:min-w-[90px] sm:min-w-[100px] truncate">
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-sm text-gray-600">{value || '-'}</span>
-                                                                </div>
-                                                            </Table.Td>
-                                                        );
-                                                    }
-
-                                                    // Default
+                                                // Special formatting for isPaid/status
+                                                if (key.toLowerCase() === 'ispaid' || key.toLowerCase() === 'status') {
                                                     return (
-                                                        <Table.Td key={key} className="text-gray-600 text-sm py-2 px-1 xs:px-2 sm:px-4 min-w-[80px] xs:min-w-[90px] sm:min-w-[100px] truncate">
-                                                            {value || '-'}
+                                                        <Table.Td key={key} className="py-2 px-1 xs:px-2 sm:px-4 min-w-[80px] xs:min-w-[90px] sm:min-w-[100px] truncate">
+                                                            <StatusBadge status={String(value)} />
                                                         </Table.Td>
                                                     );
-                                                })}
-                                            </Table.Tr>
-                                        ))}
-                                    </Table.Tbody>
-                                </Table>
-                            </Paper>
-                        </div>
+                                                }
+
+                                                // Money fields
+                                                if (key.toLowerCase().includes('fee') || key.toLowerCase().includes('payment') || key.toLowerCase().includes('amount') || key.toLowerCase().includes('balance')) {
+                                                    return (
+                                                        <Table.Td key={key} className="py-2 px-1 xs:px-2 sm:px-4 min-w-[80px] xs:min-w-[90px] sm:min-w-[100px] truncate">
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="text-xs text-gray-400">Rs.</span>
+                                                                <span className="font-bold text-gray-900 text-sm">{value || '0'}</span>
+                                                            </div>
+                                                        </Table.Td>
+                                                    );
+                                                }
+
+                                                // Name/ID fields
+                                                if (key.toLowerCase().includes('name') || key.toLowerCase().includes('user') || key.toLowerCase().includes('id')) {
+                                                    return (
+                                                        <Table.Td key={key} className="py-2 px-1 xs:px-2 sm:px-4 min-w-[80px] xs:min-w-[90px] sm:min-w-[100px] truncate">
+                                                            <Text size="sm" fw={600} className="text-gray-800">
+                                                                {value || 'N/A'}
+                                                            </Text>
+                                                        </Table.Td>
+                                                    );
+                                                }
+
+                                                // Date fields
+                                                if (key.toLowerCase().includes('date')) {
+                                                    return (
+                                                        <Table.Td key={key} className="py-2 px-1 xs:px-2 sm:px-4 min-w-[80px] xs:min-w-[90px] sm:min-w-[100px] truncate">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-sm text-gray-600">{value || '-'}</span>
+                                                            </div>
+                                                        </Table.Td>
+                                                    );
+                                                }
+
+                                                // Default
+                                                return (
+                                                    <Table.Td key={key} className="text-gray-600 text-sm py-2 px-1 xs:px-2 sm:px-4 min-w-[80px] xs:min-w-[90px] sm:min-w-[100px] truncate">
+                                                        {value || '-'}
+                                                    </Table.Td>
+                                                );
+                                            })}
+                                        </Table.Tr>
+                                    ))}
+                                </Table.Tbody>
+                            </Table>
+                        </Paper>
                     </div>
                     {parsedData.length > 50 && (
                         <div className="p-4 bg-gradient-to-r from-gray-50 to-blue-50 text-center border-t border-gray-200">

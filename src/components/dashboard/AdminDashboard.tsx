@@ -7,9 +7,8 @@ import { fetchStatsData } from '@/redux/actions/stats-actions/stats-actions';
 import { fetchAllUsers } from '@/redux/actions/user-actions/user-actions';
 import { StatsCard } from '@/components/dashboard/StatsCard';
 import { DashboardCharts } from '@/components/dashboard/DashboardCharts';
-import { SimpleGrid, Text, Button, Loader, Paper, Title } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
-import { IconUsers, IconPlus, IconSearch, IconDatabaseExport } from '@tabler/icons-react';
+import { SimpleGrid, Text, Button, Loader, Paper, Title, Menu, ActionIcon, rem, Badge } from '@mantine/core';
+import { IconUsers, IconPlus, IconSearch, IconDatabaseExport, IconDotsVertical, IconEdit, IconTrash } from '@tabler/icons-react';
 import { useRouter } from 'next/navigation';
 import { useDisclosure } from '@mantine/hooks';
 import { CreationModals } from './CreationModals';
@@ -43,7 +42,7 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <Text className="page-heading font-bold text-gray-800">
             Admin Dashboard
@@ -52,20 +51,20 @@ export function AdminDashboard() {
             Full overview and management.
           </Text>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
           <Button
-            className="bg-[#6366f1] hover:bg-[#4f46e5]"
+            className="bg-gradient-to-r from-[#00A5A8] to-[#25C4DD] hover:from-[#008e91] hover:to-[#1fa9c0] h-[46px] flex-1 lg:flex-none text-white border-none shadow-md hover:shadow-lg active:scale-95 transition-all"
             radius="md"
-            leftSection={<IconUsers size={16} />}
+            leftSection={<IconPlus size={18} />}
             onClick={openUser}
           >
             Create User
           </Button>
           <Button
-            variant="light"
-            className="text-[#6366f1] border border-[#6366f1]/30"
+            variant="outline"
+            className="text-[#00A5A8] border-[#00A5A8]/30 hover:bg-[#00A5A8]/5 h-[46px] flex-1 lg:flex-none shadow-sm hover:shadow-md active:scale-95 transition-all"
             radius="md"
-            leftSection={<IconUsers size={16} />}
+            leftSection={<IconPlus size={18} />}
             onClick={openEmployee}
           >
             Create Employee
@@ -103,7 +102,6 @@ export function AdminDashboard() {
           title="Total Users"
           value={(stats?.totalUsers ?? totalUsers).toLocaleString()}
           variant="blue"
-          action={{ label: 'View all', onClick: () => router.push('/users/roles') }}
         />
       </SimpleGrid>
 
@@ -112,7 +110,6 @@ export function AdminDashboard() {
           title="Registered users"
           value={totalUsers.toLocaleString()}
           variant="default"
-          action={{ label: 'Roles', onClick: () => router.push('/users/roles') }}
         />
         <StatsCard
           title="Employees"

@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Button, TextInput, Text, Badge, LoadingOverlay, Table, Paper, Modal, Input, Group, Divider, Select, SimpleGrid } from '@mantine/core';
+import { Button, TextInput, Text, Badge, LoadingOverlay, Table, Paper, Modal, Input, Group, Divider, Select, SimpleGrid, Menu, ActionIcon, rem } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconSearch, IconX, IconCalendar, IconCoin, IconUser, IconId, IconPrinter, IconPencil, IconPlus } from '@tabler/icons-react';
+import { IconSearch, IconX, IconCalendar, IconCoin, IconUser, IconId, IconPrinter, IconPencil, IconPlus, IconDotsVertical, IconTrash } from '@tabler/icons-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/redux/store';
 import { fetchStatsData } from '@/redux/actions/stats-actions/stats-actions';
@@ -438,95 +438,110 @@ export default function UserReportPage() {
           </div>
         )}
 
-        <Paper radius="lg" withBorder className="p-6 bg-white border-gray-200 shadow-md">
+        <Paper radius="lg" withBorder className="p-4 sm:p-6 bg-white border-gray-200 shadow-md">
           <div className="flex flex-col space-y-4">
-            <div>
+            <div className="w-full">
               <TextInput
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search by user ID, name, or paid by name..."
+                placeholder="Search user ID, ID, Name..."
                 size="md"
-                leftSection={<IconSearch size={16} />}
+                radius="md"
+                leftSection={<IconSearch size={18} className="text-gray-400" />}
                 rightSection={
                   searchTerm && (
                     <button
                       type="button"
                       onClick={() => setSearchTerm('')}
-                      className="text-gray-400 hover:text-gray-600"
+                      className="text-gray-400 hover:text-gray-600 transition-colors"
                     >
                       <IconX size={16} />
                     </button>
                   )
                 }
-                className="w-full pr-10"
+                className="w-full"
+                classNames={{
+                  input: 'h-[46px] border-gray-200 focus:border-blue-500 transition-all'
+                }}
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <Text size="sm" className="mb-1 text-gray-600 font-medium">Start Date</Text>
-                <input
-                  type="date"
-                  value={dateRange[0] ? new Date(dateRange[0]).toISOString().split('T')[0] : ''}
-                  onChange={(e) => {
-                    const newStart = e.currentTarget.value ? new Date(e.currentTarget.value) : null;
-                    setDateRange([newStart, dateRange[1]]);
-                  }}
-                  className="w-full h-10 px-3 py-2 text-sm text-gray-700 placeholder-gray-400 border border-gray-300 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+              <div className="flex flex-col gap-1.5">
+                <Text size="sm" fw={600} className="text-gray-700 ml-1">Start Date</Text>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                    <IconCalendar size={18} />
+                  </div>
+                  <input
+                    type="date"
+                    value={dateRange[0] ? new Date(dateRange[0]).toISOString().split('T')[0] : ''}
+                    onChange={(e) => {
+                      const newStart = e.currentTarget.value ? new Date(e.currentTarget.value) : null;
+                      setDateRange([newStart, dateRange[1]]);
+                    }}
+                    className="w-full h-[46px] pl-10 pr-3 py-2 text-sm text-gray-700 border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  />
+                </div>
               </div>
-              <div>
-                <Text size="sm" className="mb-1 text-gray-600 font-medium">End Date</Text>
-                <input
-                  type="date"
-                  value={dateRange[1] ? new Date(dateRange[1]).toISOString().split('T')[0] : ''}
-                  onChange={(e) => {
-                    const newEnd = e.currentTarget.value ? new Date(e.currentTarget.value) : null;
-                    setDateRange([dateRange[0], newEnd]);
-                  }}
-                  className="w-full h-10 px-3 py-2 text-sm text-gray-700 placeholder-gray-400 border border-gray-300 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+
+              <div className="flex flex-col gap-1.5">
+                <Text size="sm" fw={600} className="text-gray-700 ml-1">End Date</Text>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                    <IconCalendar size={18} />
+                  </div>
+                  <input
+                    type="date"
+                    value={dateRange[1] ? new Date(dateRange[1]).toISOString().split('T')[0] : ''}
+                    onChange={(e) => {
+                      const newEnd = e.currentTarget.value ? new Date(e.currentTarget.value) : null;
+                      setDateRange([dateRange[0], newEnd]);
+                    }}
+                    className="w-full h-[46px] pl-10 pr-3 py-2 text-sm text-gray-700 border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  />
+                </div>
               </div>
-              <div>
-                <Text size="sm" className="mb-2 text-gray-600 font-medium">
-                  Status
-                </Text>
+
+              <div className="flex flex-col gap-1.5">
+                <Text size="sm" fw={600} className="text-gray-700 ml-1">Paid Status</Text>
                 <Select
-                  placeholder="All"
+                  placeholder="All Status"
                   value={paidStatus}
                   onChange={(value) => value && setPaidStatus(value)}
                   data={[
-                    { value: 'all', label: 'All' },
+                    { value: 'all', label: 'All Status' },
                     { value: 'paid', label: 'Paid' },
                     { value: 'unpaid', label: 'Unpaid' },
                   ]}
                   size="md"
+                  radius="md"
                   className="w-full"
+                  classNames={{
+                    input: 'h-[46px] border-gray-200 focus:border-blue-500 transition-all'
+                  }}
                 />
               </div>
 
-              <div className="flex items-end">
-                <Button
-                  onClick={() => {
-                    if (filteredRecords.length === 0) {
-                      notifications.show({
-                        title: 'Cannot print',
-                        message: 'No payment records available for print',
-                        color: 'orange',
-                        position: 'top-right'
-                      });
-                      return;
-                    }
-                    window.print();
-                  }}
-                  disabled={filteredRecords.length === 0}
-                  className="bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white flex items-center justify-center gap-2 w-full h-[44px] rounded-lg shadow-md transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                  size="md"
-                  leftSection={<IconPrinter size={18} />}
-                >
-                  Print
-                </Button>
-              </div>
+              <Button
+                onClick={() => {
+                  if (filteredRecords.length === 0) {
+                    notifications.show({
+                      title: 'Cannot print',
+                      message: 'No records available to print',
+                      color: 'orange',
+                    });
+                    return;
+                  }
+                  window.print();
+                }}
+                disabled={filteredRecords.length === 0}
+                className="bg-blue-600 hover:bg-blue-700 text-white h-[46px] transition-all shadow-sm active:scale-[0.98]"
+                radius="md"
+                leftSection={<IconPrinter size={18} />}
+              >
+                Print Report
+              </Button>
             </div>
           </div>
         </Paper>
@@ -562,12 +577,13 @@ export default function UserReportPage() {
                     <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[100px] sm:min-w-[120px]" style={{ fontSize: 'var(--text-sm)' }}>Paid By Name</Table.Th>
                     <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[80px] sm:min-w-[100px]" style={{ fontSize: 'var(--text-sm)' }}>Amount</Table.Th>
                     <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[60px] sm:min-w-[80px]" style={{ fontSize: 'var(--text-sm)' }}>Status</Table.Th>
+                    <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[100px] sm:min-w-[120px]" style={{ fontSize: 'var(--text-sm)' }}>Actions</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
                   {isLoading ? (
                     <Table.Tr>
-                      <Table.Td colSpan={7} className="text-center py-10">
+                      <Table.Td colSpan={8} className="text-center py-10">
                         <LoadingOverlay visible={true} overlayProps={{ radius: "sm", blur: 2 }} />
                         <Text className="text-center py-4">Loading payment records...</Text>
                       </Table.Td>
@@ -609,6 +625,43 @@ export default function UserReportPage() {
                           >
                             {record.isPaid ? 'PAID' : 'UNPAID'}
                           </Badge>
+                        </Table.Td>
+                        <Table.Td className="py-2 px-2 sm:px-4 min-w-[100px] sm:min-w-[120px]">
+                          <Menu shadow="md" width={160} position="bottom-end">
+                            <Menu.Target>
+                              <ActionIcon
+                                variant="subtle"
+                                color="gray"
+                                size="lg"
+                                className="rounded-full hover:bg-gray-100 hover:text-[#00A5A8] transition-all duration-200"
+                              >
+                                <IconDotsVertical size={20} />
+                              </ActionIcon>
+                            </Menu.Target>
+                            <Menu.Dropdown>
+                              <Menu.Label>Actions</Menu.Label>
+                              <Menu.Item
+                                leftSection={<IconPencil style={{ width: rem(14), height: rem(14) }} />}
+                                onClick={() => setEditingUser(record)}
+                              >
+                                Edit Record
+                              </Menu.Item>
+                              <Menu.Item
+                                color="red"
+                                leftSection={<IconTrash style={{ width: rem(14), height: rem(14) }} />}
+                                onClick={() => {/* Add delete if needed */ }}
+                              >
+                                Delete Record
+                              </Menu.Item>
+                              <Menu.Divider />
+                              <Menu.Item
+                                leftSection={<IconPrinter style={{ width: rem(14), height: rem(14) }} />}
+                                onClick={() => window.print()}
+                              >
+                                Print Report
+                              </Menu.Item>
+                            </Menu.Dropdown>
+                          </Menu>
                         </Table.Td>
                       </Table.Tr>
                     ))

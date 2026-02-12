@@ -6,7 +6,8 @@ import { collection, query, getDocs, orderBy, doc, getDoc } from 'firebase/fires
 import { db } from '@/lib/firebase';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/redux/store';
-import { Table, Text, Loader, Badge, Paper, LoadingOverlay, Select } from '@mantine/core';
+import { Table, Text, Loader, Badge, Paper, LoadingOverlay, Select, Menu, ActionIcon } from '@mantine/core';
+import { IconDotsVertical, IconPrinter } from '@tabler/icons-react';
 import { StatsCard } from '@/components/dashboard/StatsCard';
 
 type PaymentRecord = {
@@ -214,7 +215,7 @@ export default function CollectionsPage() {
             />
           </div>
           <div>
-            <Text size="sm" className="mb-2 text-gray-600 font-medium">Status</Text>
+            <Text size="sm" className=" mb-1 text-gray-600 font-medium">Status</Text>
             <Select
               value={dataTypes[0]}
               onChange={(v) => setDataTypes(v ? [v] : ['all'])}
@@ -235,17 +236,19 @@ export default function CollectionsPage() {
           <Text className="text-xl font-bold text-gray-800">Payment records</Text>
           <Badge color="blue" variant="light">{filteredRecords.length} records</Badge>
         </div>
-        <div className="overflow-x-auto">
-          <Paper radius="md" withBorder className="overflow-hidden border-gray-100 shadow-sm">
-            <Table verticalSpacing="sm" horizontalSpacing="md" className="min-w-full">
+        {/* table container with horizontal scroll */}
+        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+          <Paper radius="lg" withBorder className="overflow-hidden border-gray-100 shadow-sm min-w-[900px]">
+            <Table verticalSpacing="md" horizontalSpacing="lg" className="min-w-full">
               <Table.Thead className="bg-gray-50/50">
                 <Table.Tr>
-                  <Table.Th className="text-gray-500 font-semibold text-xs uppercase py-3">User</Table.Th>
-                  <Table.Th className="text-gray-500 font-semibold text-xs uppercase py-3">Name</Table.Th>
-                  <Table.Th className="text-gray-500 font-semibold text-xs uppercase py-3">Date</Table.Th>
-                  <Table.Th className="text-gray-500 font-semibold text-xs uppercase py-3">Paid by</Table.Th>
-                  <Table.Th className="text-gray-500 font-semibold text-xs uppercase py-3">Amount</Table.Th>
-                  <Table.Th className="text-gray-500 font-semibold text-xs uppercase py-3">Status</Table.Th>
+                  <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[120px]" style={{ fontSize: 'var(--text-sm)' }}>User</Table.Th>
+                  <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[140px]" style={{ fontSize: 'var(--text-sm)' }}>Name</Table.Th>
+                  <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[100px]" style={{ fontSize: 'var(--text-sm)' }}>Date</Table.Th>
+                  <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[120px]" style={{ fontSize: 'var(--text-sm)' }}>Paid by</Table.Th>
+                  <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[110px]" style={{ fontSize: 'var(--text-sm)' }}>Amount</Table.Th>
+                  <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[80px]" style={{ fontSize: 'var(--text-sm)' }}>Status</Table.Th>
+                  <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[100px]" style={{ fontSize: 'var(--text-sm)' }}>Actions</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -257,16 +260,39 @@ export default function CollectionsPage() {
                   </Table.Tr>
                 ) : (
                   filteredRecords.map((record) => (
-                    <Table.Tr key={record.id} className="border-b border-gray-100 last:border-b-0">
-                      <Table.Td className="font-medium text-gray-700">{record.username}</Table.Td>
-                      <Table.Td>{record.userName}</Table.Td>
-                      <Table.Td>{record.date}</Table.Td>
-                      <Table.Td>{record.paidByName}</Table.Td>
-                      <Table.Td className="font-semibold">Rs. {record.amount.toFixed(2)}</Table.Td>
-                      <Table.Td>
-                        <Badge variant="light" color={record.isPaid ? 'green' : 'orange'} size="sm">
+                    <Table.Tr key={record.id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-100 last:border-b-0">
+                      <Table.Td className="font-semibold text-gray-700 py-2 px-2 sm:px-4">{record.username}</Table.Td>
+                      <Table.Td className="py-2 px-2 sm:px-4">{record.userName}</Table.Td>
+                      <Table.Td className="py-2 px-2 sm:px-4">{record.date}</Table.Td>
+                      <Table.Td className="py-2 px-2 sm:px-4">{record.paidByName}</Table.Td>
+                      <Table.Td className="font-bold text-gray-800 py-2 px-2 sm:px-4">Rs. {record.amount.toFixed(2)}</Table.Td>
+                      <Table.Td className="py-2 px-2 sm:px-4">
+                        <Badge variant="light" color={record.isPaid ? 'green' : 'orange'} radius="sm" className="font-bold py-2 px-3 text-xs">
                           {record.isPaid ? 'PAID' : 'UNPAID'}
                         </Badge>
+                      </Table.Td>
+                      <Table.Td className="py-2 px-2 sm:px-4">
+                        <Menu shadow="md" width={160} position="bottom-end">
+                          <Menu.Target>
+                            <ActionIcon
+                              variant="subtle"
+                              color="gray"
+                              size="lg"
+                              className="rounded-full hover:bg-gray-100 hover:text-[#00A5A8] transition-all duration-200"
+                            >
+                              <IconDotsVertical size={20} />
+                            </ActionIcon>
+                          </Menu.Target>
+                          <Menu.Dropdown>
+                            <Menu.Label>Actions</Menu.Label>
+                            <Menu.Item
+                              leftSection={<IconPrinter style={{ width: 14, height: 14 }} />}
+                              onClick={() => {/* Add print logic */ }}
+                            >
+                              Print Receipt
+                            </Menu.Item>
+                          </Menu.Dropdown>
+                        </Menu>
                       </Table.Td>
                     </Table.Tr>
                   ))

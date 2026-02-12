@@ -13,6 +13,8 @@ import { IconBrandGoogle, IconLock, IconAt } from '@tabler/icons-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { notifications } from '@mantine/notifications';
+import logoIcon from '../../assets/images/logo.jpg';
+import logoIconmini from '../../assets/images/logo2.jpg';
 
 const provider = new GoogleAuthProvider();
 
@@ -75,9 +77,9 @@ export default function LoginPage() {
         <div className="max-w-sm mx-auto w-full">
           <Group gap="xs" mb="xl">
             <Box className="w-10 h-10 rounded-lg bg-white flex items-center justify-center overflow-hidden">
-              <Image src="/image/logo.png" alt="CoreManage" width={26} height={26} className="object-contain" />
+              <Image src={logoIcon} alt="CoreManage" width={40} height={40} className="object-contain" />
             </Box>
-            <Text className="font-bold text-white" style={{ fontSize: 'var(--text-lg)' }}>CoreManage</Text>
+            <Text className="font-bold text-white" style={{ fontSize: 'var(--text-lg)' }}>Core<span className='text-[#0f172a]'>Manage</span></Text>
           </Group>
           <Text className="font-bold text-white leading-tight mb-2" style={{ fontSize: 'var(--text-xl)' }}>
             Master your business ecosystem.
@@ -102,8 +104,9 @@ export default function LoginPage() {
         <div className="w-full max-w-[320px]">
           <div className="text-center lg:text-left mb-6">
             <div className="lg:hidden flex justify-center mb-4">
-              <Box className="w-9 h-9 rounded-lg bg-[#6366f1] flex items-center justify-center">
-                <Image src="/image/logo.png" alt="CoreManage" width={22} height={22} className="object-contain opacity-90" />
+              {/* <Box className="w-9 h-9 rounded-lg bg-[#6366f1] flex items-center justify-center"> */}
+              <Box className="w-[30px] h-[30px] rounded-lg bg-[#6366f1] flex items-center justify-center">
+                <Image src={logoIconmini} alt="CoreManage" width={60} height={60} className="object-contain opacity-90" />
               </Box>
             </div>
             <Text className="font-bold text-gray-800" style={{ fontSize: 'var(--text-xl)' }}>Welcome back</Text>
@@ -133,7 +136,7 @@ export default function LoginPage() {
                 type="email"
                 value={formStates.identifier}
                 onChange={(e) => setFormStates((prev) => ({ ...prev, identifier: e.target.value }))}
-                leftSection={<IconAt size={18} className="text-gray-400" />}
+                // leftSection={<IconAt size={18} className="text-gray-400" />}
                 size="md"
                 radius="md"
                 classNames={{ input: 'font-normal' }}

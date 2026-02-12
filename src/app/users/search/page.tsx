@@ -951,31 +951,33 @@ export default function UploadEntrySearchTable() {
         </div>
       )}
 
-      <Paper radius="lg" withBorder className="p-6 bg-white border-gray-200 shadow-md">
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-          <div className="flex-grow">
+      <Paper radius="lg" withBorder className="p-4 sm:p-6 bg-white border-gray-200 shadow-sm">
+        <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-end">
+          <div className="flex-1">
+            <Text size="sm" className="mb-1 text-gray-600 font-medium">Search</Text>
             <TextInput
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by name, username, address, or package..."
+              placeholder="Search by name, ID, address..."
               size="md"
-              leftSection={<IconSearch size={16} />}
+              radius="md"
+              // leftSection={<IconSearch size={18} className="text-gray-400" />}
               rightSection={
                 searchTerm && (
                   <button
                     type="button"
                     onClick={() => setSearchTerm('')}
-                    className="text-gray-400 hover:text-gray-600"
+                    className="text-gray-400 hover:text-gray-600 outline-none"
                   >
                     <IconX size={16} />
                   </button>
                 )
               }
-              className="w-full pr-10"
+              className="w-full"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:w-[400px]">
             <div>
               <Text size="sm" className="mb-1 text-gray-600 font-medium">Start Date</Text>
               <input
@@ -985,7 +987,7 @@ export default function UploadEntrySearchTable() {
                   const newStart = e.currentTarget.value ? new Date(e.currentTarget.value) : null;
                   setDateRange([newStart, dateRange[1]]);
                 }}
-                className="w-full h-10 px-3 py-2 text-sm text-gray-700 placeholder-gray-400 border border-gray-300 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full h-[42px] px-3 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
               />
             </div>
             <div>
@@ -997,15 +999,16 @@ export default function UploadEntrySearchTable() {
                   const newEnd = e.currentTarget.value ? new Date(e.currentTarget.value) : null;
                   setDateRange([dateRange[0], newEnd]);
                 }}
-                className="w-full h-10 px-3 py-2 text-sm text-gray-700 placeholder-gray-400 border border-gray-300 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full h-[42px] px-3 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
               />
             </div>
           </div>
 
           <Button
             onClick={() => setIsNewUserModalOpen(true)}
-            className="bg-gradient-to-r from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 text-white flex items-center justify-center gap-2 h-[44px] rounded-lg shadow-md transition-all duration-200"
             size="md"
+            radius="md"
+            className="bg-[#1e40af] hover:bg-[#1e3a8a] text-white shadow-sm transition-colors h-[42px]"
             leftSection={<IconPlus size={18} />}
           >
             Create User
@@ -1033,166 +1036,69 @@ export default function UploadEntrySearchTable() {
 
         {/* Responsive table container */}
         <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent pb-3">
-          {/* Desktop/Tablet view - Table */}
-          <div className="hidden md:block">
-            <Paper radius="md" withBorder className="overflow-hidden border-gray-100 shadow-sm">
-              <Table verticalSpacing="sm" horizontalSpacing="lg" className="min-w-full">
-                <Table.Thead className="bg-gray-50/50">
+          <Paper radius="lg" withBorder className="overflow-hidden border-gray-100 shadow-sm min-w-[1000px]">
+            <Table verticalSpacing="md" horizontalSpacing="lg" className="min-w-full">
+              <Table.Thead className="bg-gray-50/50">
+                <Table.Tr>
+                  <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[100px] sm:min-w-[120px]" style={{ fontSize: 'var(--text-sm)' }}>User ID</Table.Th>
+                  <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[100px] sm:min-w-[120px]" style={{ fontSize: 'var(--text-sm)' }}>Name</Table.Th>
+                  <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[100px] sm:min-w-[120px]" style={{ fontSize: 'var(--text-sm)' }}>Address</Table.Th>
+                  <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[80px] sm:min-w-[100px]" style={{ fontSize: 'var(--text-sm)' }}>Package</Table.Th>
+                  <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[80px] sm:min-w-[100px]" style={{ fontSize: 'var(--text-sm)' }}>Start Date</Table.Th>
+                  <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[80px] sm:min-w-[100px]" style={{ fontSize: 'var(--text-sm)' }}>Total Payable Amount</Table.Th>
+                  <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[60px] sm:min-w-[80px]" style={{ fontSize: 'var(--text-sm)' }}>Status</Table.Th>
+                  <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[100px] sm:min-w-[120px]" style={{ fontSize: 'var(--text-sm)' }}>Actions</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {isLoading ? (
                   <Table.Tr>
-                    <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[100px] sm:min-w-[120px]" style={{ fontSize: 'var(--text-sm)' }}>User ID</Table.Th>
-                    <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[100px] sm:min-w-[120px]" style={{ fontSize: 'var(--text-sm)' }}>Name</Table.Th>
-                    <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[100px] sm:min-w-[120px]" style={{ fontSize: 'var(--text-sm)' }}>Address</Table.Th>
-                    <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[80px] sm:min-w-[100px]" style={{ fontSize: 'var(--text-sm)' }}>Package</Table.Th>
-                    <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[80px] sm:min-w-[100px]" style={{ fontSize: 'var(--text-sm)' }}>Start Date</Table.Th>
-                    <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[80px] sm:min-w-[100px]" style={{ fontSize: 'var(--text-sm)' }}>Total Payable Amount</Table.Th>
-                    <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[60px] sm:min-w-[80px]" style={{ fontSize: 'var(--text-sm)' }}>Status</Table.Th>
-                    <Table.Th className="text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-200 min-w-[100px] sm:min-w-[120px]" style={{ fontSize: 'var(--text-sm)' }}>Actions</Table.Th>
+                    <Table.Td colSpan={8} className="text-center py-10">
+                      <LoadingOverlay visible={true} overlayProps={{ radius: "sm", blur: 2 }} />
+                      <Text className="text-center py-4">Loading users...</Text>
+                    </Table.Td>
                   </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {isLoading ? (
-                    <Table.Tr>
-                      <Table.Td colSpan={10} className="text-center py-10">
-                        <LoadingOverlay visible={true} overlayProps={{ radius: "sm", blur: 2 }} />
-                        <Text className="text-center py-4">Loading users...</Text>
+                ) : filteredUsers.length > 0 ? (
+                  filteredUsers.map((user) => (
+                    <Table.Tr key={user.id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-100 last:border-b-0">
+                      <Table.Td className="font-semibold text-gray-700 py-2 px-2 sm:px-4 min-w-[100px] sm:min-w-[120px]">
+                        {user.username}
                       </Table.Td>
-                    </Table.Tr>
-                  ) : filteredUsers.length > 0 ? (
-                    filteredUsers.map((user) => (
-                      <Table.Tr key={user.id} className="hover:bg-gray-50/50 transition-colors border-b border-gray-100 last:border-b-0">
-                        <Table.Td className="font-semibold text-gray-700 py-2 px-2 sm:px-4 min-w-[100px] sm:min-w-[120px]">
-                          {user.username}
-                        </Table.Td>
-                        <Table.Td className="py-2 px-2 sm:px-4 min-w-[100px] sm:min-w-[120px]">
-                          {user.name}
-                        </Table.Td>
-                        <Table.Td className="py-2 px-2 sm:px-4 min-w-[100px] sm:min-w-[120px]">
-                          {user.address}
-                        </Table.Td>
-                        <Table.Td className="py-2 px-2 sm:px-4 min-w-[80px] sm:min-w-[100px]">
-                          {user.package || 'N/A'}
-                        </Table.Td>
-                        <Table.Td className="py-2 px-2 sm:px-4 min-w-[80px] sm:min-w-[100px]">
-                          {user.startDate}
-                        </Table.Td>
-                        <Table.Td className="font-bold text-gray-800 py-2 px-2 sm:px-4 min-w-[80px] sm:min-w-[100px]">
-                          Rs. {user.totalAmount.toFixed(2)}
-                        </Table.Td>
-                        <Table.Td className="py-2 px-2 sm:px-4 min-w-[60px] sm:min-w-[80px]">
-                          <Badge
-                            variant="light"
-                            color={user.isPaid ? 'green' : 'orange'}
-                            radius="sm"
-                            className="font-bold py-2 px-3 text-xs"
-                          >
-                            {user.isPaid ? 'PAID' : 'UNPAID'}
-                          </Badge>
-                        </Table.Td>
-                        <Table.Td className="py-2 px-2 sm:px-4 min-w-[100px] sm:min-w-[120px]">
-                          <Menu shadow="md" width={200}>
-                            <Menu.Target>
-                              <ActionIcon variant="subtle" color="gray" size="lg">
-                                <IconDotsVertical size={16} />
-                              </ActionIcon>
-                            </Menu.Target>
-
-                            <Menu.Dropdown>
-                              <Menu.Item
-                                leftSection={<IconPencil size={14} />}
-                                onClick={() => handleEditClick(user)}
-                              >
-                                Edit User
-                              </Menu.Item>
-                              <Menu.Divider />
-                              <Menu.Label>Danger zone</Menu.Label>
-                              <Menu.Item
-                                color="red"
-                                leftSection={<IconTrash size={14} />}
-                                onClick={() => setUserToDelete(user)}
-                              >
-                                Delete User
-                              </Menu.Item>
-                              <Menu.Divider />
-                              <Menu.Item
-                                leftSection={<IconCoin size={14} />}
-                                onClick={() => {
-                                  setSelectedUser(user);
-                                  setIsPaidPaymentModalOpen(true);
-                                }}
-                              >
-                                Paid Payment
-                              </Menu.Item>
-                            </Menu.Dropdown>
-                          </Menu>
-                        </Table.Td>
-                      </Table.Tr>
-                    ))
-                  ) : (
-                    <Table.Tr>
-                      <Table.Td colSpan={10} className="text-center py-10 text-gray-500">
-                        {searchTerm ? 'No users found matching your search' : 'No users available'}
+                      <Table.Td className="py-2 px-2 sm:px-4 min-w-[100px] sm:min-w-[120px]">
+                        {user.name}
                       </Table.Td>
-                    </Table.Tr>
-                  )}
-                </Table.Tbody>
-              </Table>
-            </Paper>
-          </div>
-
-          {/* Mobile view - Cards */}
-          <div className="md:hidden">
-            {isLoading ? (
-              <div className="flex justify-center items-center py-10">
-                <LoadingOverlay visible={true} overlayProps={{ radius: "sm", blur: 2 }} />
-                <Text className="text-center py-4">Loading users...</Text>
-              </div>
-            ) : filteredUsers.length > 0 ? (
-              <div className="space-y-4">
-                {filteredUsers.map((user) => (
-                  <Paper key={user.id} radius="md" withBorder className="p-4 border-gray-100 shadow-sm">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <Text size="xs" className="text-gray-500">User ID:</Text>
-                        <Text className="font-semibold text-gray-700">{user.username}</Text>
-                      </div>
-                      <div>
-                        <Text size="xs" className="text-gray-500">Name:</Text>
-                        <Text className="text-gray-700">{user.name}</Text>
-                      </div>
-                      <div>
-                        <Text size="xs" className="text-gray-500">Address:</Text>
-                        <Text className="text-gray-700">{user.address}</Text>
-                      </div>
-                      <div>
-                        <Text size="xs" className="text-gray-500">Package:</Text>
-                        <Text className="text-gray-700">{user.package || 'N/A'}</Text>
-                      </div>
-                      <div>
-                        <Text size="xs" className="text-gray-500">Start Date:</Text>
-                        <Text className="text-gray-700">{user.startDate}</Text>
-                      </div>
-                      <div>
-                        <Text size="xs" className="text-gray-500">Total Payable Amount:</Text>
-                        <Text className="font-bold text-gray-800">Rs. {user.totalAmount.toFixed(2)}</Text>
-                      </div>
-                    </div>
-                    <div className="mt-3 pt-2 border-t border-gray-100">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <Text size="xs" className="text-gray-500">Status:</Text>
-                          <Badge
-                            variant="light"
-                            color={user.isPaid ? 'green' : 'orange'}
-                            radius="sm"
-                            className="font-bold py-1 px-2 text-xs mt-1"
-                          >
-                            {user.isPaid ? 'PAID' : 'UNPAID'}
-                          </Badge>
-                        </div>
-                        <Menu shadow="md" width={200}>
+                      <Table.Td className="py-2 px-2 sm:px-4 min-w-[100px] sm:min-w-[120px]">
+                        {user.address}
+                      </Table.Td>
+                      <Table.Td className="py-2 px-2 sm:px-4 min-w-[80px] sm:min-w-[100px]">
+                        {user.package || 'N/A'}
+                      </Table.Td>
+                      <Table.Td className="py-2 px-2 sm:px-4 min-w-[80px] sm:min-w-[100px]">
+                        {user.startDate}
+                      </Table.Td>
+                      <Table.Td className="font-bold text-gray-800 py-2 px-2 sm:px-4 min-w-[80px] sm:min-w-[100px]">
+                        Rs. {user.totalAmount.toFixed(2)}
+                      </Table.Td>
+                      <Table.Td className="py-2 px-2 sm:px-4 min-w-[60px] sm:min-w-[80px]">
+                        <Badge
+                          variant="light"
+                          color={user.isPaid ? 'green' : 'orange'}
+                          radius="sm"
+                          className="font-bold py-2 px-3 text-xs"
+                        >
+                          {user.isPaid ? 'PAID' : 'UNPAID'}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td className="py-2 px-2 sm:px-4 min-w-[100px] sm:min-w-[120px]">
+                        <Menu shadow="md" width={200} position="bottom-end">
                           <Menu.Target>
-                            <ActionIcon variant="subtle" color="gray" size="lg">
-                              <IconDotsVertical size={16} />
+                            <ActionIcon
+                              variant="subtle"
+                              color="gray"
+                              size="lg"
+                              className="rounded-full hover:bg-gray-100 hover:text-[#00A5A8] transition-all duration-200"
+                            >
+                              <IconDotsVertical size={20} />
                             </ActionIcon>
                           </Menu.Target>
 
@@ -1224,17 +1130,19 @@ export default function UploadEntrySearchTable() {
                             </Menu.Item>
                           </Menu.Dropdown>
                         </Menu>
-                      </div>
-                    </div>
-                  </Paper>
-                ))}
-              </div>
-            ) : (
-              <Paper radius="md" withBorder className="p-6 text-center text-gray-500 border-gray-100 shadow-sm">
-                {searchTerm ? 'No users found matching your search' : 'No users available'}
-              </Paper>
-            )}
-          </div>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))
+                ) : (
+                  <Table.Tr>
+                    <Table.Td colSpan={8} className="text-center py-10 text-gray-500">
+                      {searchTerm ? 'No users found matching your search' : 'No users available'}
+                    </Table.Td>
+                  </Table.Tr>
+                )}
+              </Table.Tbody>
+            </Table>
+          </Paper>
         </div>
       </div>
 
@@ -1249,6 +1157,10 @@ export default function UploadEntrySearchTable() {
           </Text>
         }
         size="lg"
+        centered
+        radius="md"
+        withCloseButton
+        styles={{ close: { color: '#1e40af', scale: 1.2 } }}
         overlayProps={{
           backgroundOpacity: 0.5,
           blur: 3,
@@ -1505,11 +1417,15 @@ export default function UploadEntrySearchTable() {
         }}
         title={
           <Text className="flex items-center gap-2">
-            <IconCoin className="text-green-600" size={20} />
-            Make Payment 2 for: <span className="font-bold">{selectedUser?.name || selectedUser?.username}</span>
+            <IconCoin className="text-blue-600" size={20} />
+            Make Payment for: <span className="font-bold">{selectedUser?.name || selectedUser?.username}</span>
           </Text>
         }
         size="lg"
+        centered
+        radius="md"
+        withCloseButton
+        styles={{ close: { color: '#1e40af', scale: 1.2 } }}
         overlayProps={{
           backgroundOpacity: 0.5,
           blur: 3,
@@ -1594,6 +1510,10 @@ export default function UploadEntrySearchTable() {
           </Text>
         }
         size="lg"
+        centered
+        radius="md"
+        withCloseButton
+        styles={{ close: { color: '#1e40af', scale: 1.2 } }}
         overlayProps={{
           backgroundOpacity: 0.5,
           blur: 3,

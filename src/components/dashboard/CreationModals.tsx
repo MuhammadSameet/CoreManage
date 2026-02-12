@@ -8,7 +8,9 @@ import {
     Stack as MantineStack,
     Select as MantineSelect,
     Group as MantineGroup,
+    ActionIcon,
 } from '@mantine/core';
+import { IconX } from '@tabler/icons-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '@/redux/store';
 import { signUpUser } from '@/redux/actions/auth-actions/auth-actions';
@@ -16,6 +18,7 @@ import { notifications } from '@mantine/notifications';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { createMonthlyDataForUser } from '@/utils/monthlyDataUtils';
+import { toast } from 'react-toastify';
 
 const Modal = MantineModal;
 const TextInput = MantineTextInput;
@@ -40,6 +43,7 @@ export function CreationModals({ opened, onClose, type }: CreationModalProps) {
     const [uploadEntryData, setUploadEntryData] = useState({
         'User ID': '',
         Username: '',
+        FullName: '',
         Package: '',
         Amount: '',
         Address: '',
@@ -65,17 +69,14 @@ export function CreationModals({ opened, onClose, type }: CreationModalProps) {
             // Create corresponding monthly data entry
             await createMonthlyDataForUser(docRef.id, uploadEntryData);
 
-            notifications.show({
-                title: 'User Created',
-                message: `New user ${uploadEntryData.Username} has been added to the billing system.`,
-                color: 'green'
-            });
+            toast.success(`User ${uploadEntryData.Username} created successfully!`);
 
             onClose();
             // Reset form
             setUploadEntryData({
                 'User ID': '',
                 Username: '',
+                FullName: '',
                 Package: '',
                 Amount: '',
                 Address: '',
@@ -87,11 +88,7 @@ export function CreationModals({ opened, onClose, type }: CreationModalProps) {
                 Date: new Date().toISOString().split('T')[0],
             });
         } catch (error: unknown) {
-            notifications.show({
-                title: 'Error',
-                message: error instanceof Error ? error.message : 'Something went wrong. Please try again.',
-                color: 'red'
-            });
+            toast.error(error instanceof Error ? error.message : 'Something went wrong. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -103,34 +100,27 @@ export function CreationModals({ opened, onClose, type }: CreationModalProps) {
 
         try {
             if (type === 'attendance') {
-                notifications.show({
-                    title: 'Attendance Added',
-                    message: 'Attendance record has been successfully recorded.',
-                    color: 'green'
-                });
+                toast.success('Attendance recorded successfully!');
             } else if (type === 'uploadEntry') {
                 await handleUploadEntrySubmit(e);
             } else {
                 // For user/employee creation, save to Firebase users collection
                 await dispatch(signUpUser({
-                    name: uploadEntryData.Username || 'N/A',
-                    email: uploadEntryData['User ID'] || `temp-${Math.random().toString(36).substring(7)}@example.com`, // Use a temporary email if not provided
-                    password: uploadEntryData.Password || 'TempPass123!', // Use a temporary password if not provided
-                    role: type === 'employee' ? 'employee' : 'user', // Differentiate between user and employee roles
-                    username: uploadEntryData.Username // Pass username for uploadEntry
-                }));
+                    name: uploadEntryData.FullName || 'N/A',
+                    email: uploadEntryData['User ID'] || `${uploadEntryData.Username}@example.com`,
+                    password: uploadEntryData.Password || 'TempPass123!',
+                    role: type === 'employee' ? 'employee' : 'user',
+                    username: uploadEntryData.Username
+                }, true));
 
-                notifications.show({
-                    title: `${type === 'user' ? 'User' : 'Employee'} Created`,
-                    message: `New ${type === 'user' ? 'user' : 'employee'} ${uploadEntryData.Username || 'N/A'} has been added to the system.`,
-                    color: 'blue'
-                });
+                toast.success(`${type === 'user' ? 'User' : 'Employee'} created successfully!`);
             }
             onClose();
             // Reset form
             setUploadEntryData({
                 'User ID': '',
                 Username: '',
+                FullName: '',
                 Package: '',
                 Amount: '',
                 Address: '',
@@ -142,11 +132,7 @@ export function CreationModals({ opened, onClose, type }: CreationModalProps) {
                 Date: new Date().toISOString().split('T')[0],
             });
         } catch (error: unknown) {
-            notifications.show({
-                title: 'Error',
-                message: error instanceof Error ? error.message : 'Something went wrong. Please try again.',
-                color: 'red'
-            });
+            toast.error(error instanceof Error ? error.message : 'Something went wrong. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -161,7 +147,7 @@ export function CreationModals({ opened, onClose, type }: CreationModalProps) {
 
     if (type === 'uploadEntry') {
         return (
-            <Modal opened={opened} onClose={onClose} title={modalTitle} centered radius="md" size="lg">
+            <Modal opened={opened} onClose={onClose} title={modalTitle} centered radius="md" size="lg" withCloseButton={true} styles={{ close: { color: '#1e40af', scale: 1.2 } }}>
                 <form onSubmit={handleSubmit}>
                     <Stack gap="md">
                         <TextInput
@@ -252,7 +238,19 @@ export function CreationModals({ opened, onClose, type }: CreationModalProps) {
     }
 
     return (
-        <Modal opened={opened} onClose={onClose} title={modalTitle} centered radius="md" size="md">
+        <Modal
+            opened={opened}
+            onClose={onClose}
+            title={modalTitle}
+            centered
+            radius="md"
+            size="md"
+            withCloseButton={true}
+            styles={{
+                title: { fontWeight: 700, fontSize: '1.2rem', color: '#1e40af' },
+                close: { color: '#1e40af', scale: 1.2 }
+            }}
+        >
             <form onSubmit={handleSubmit}>
                 <Stack gap="md">
                     {type !== 'attendance' && (
@@ -261,8 +259,8 @@ export function CreationModals({ opened, onClose, type }: CreationModalProps) {
                                 required
                                 label="Full Name"
                                 placeholder="Enter full name"
-                                value={uploadEntryData.Username}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUploadEntryData({ ...uploadEntryData, Username: e.target.value })}
+                                value={uploadEntryData.FullName}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUploadEntryData({ ...uploadEntryData, FullName: e.target.value })}
                             />
                             <TextInput
                                 required
@@ -285,15 +283,6 @@ export function CreationModals({ opened, onClose, type }: CreationModalProps) {
                                 value={uploadEntryData.Password}
                                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUploadEntryData({ ...uploadEntryData, Password: e.target.value })}
                             />
-                            {type === 'employee' && (
-                                <Select
-                                    label="Department"
-                                    placeholder="Select department"
-                                    data={['Sales', 'Support', 'Development', 'Management']}
-                                    defaultValue="Sales"
-                                    onChange={(val: string | null) => setUploadEntryData({ ...uploadEntryData, 'User ID': `Employee - ${val || 'Sales'}` })}
-                                />
-                            )}
                         </>
                     )}
 

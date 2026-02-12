@@ -4,8 +4,12 @@ import {
     Text as MantineText,
     Button as MantineButton,
     Loader as MantineLoader,
-    Badge as MantineBadge
+    Badge as MantineBadge,
+    Menu,
+    ActionIcon,
+    rem
 } from '@mantine/core';
+import { IconDotsVertical, IconEdit, IconTrash } from '@tabler/icons-react';
 import { StatsCard } from './StatsCard';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '@/redux/store';
@@ -23,7 +27,7 @@ const Badge = MantineBadge;
 export function EmployeeDashboardSection() {
     const dispatch = useDispatch<AppDispatch>();
     const { usersList, loading } = useSelector((state: RootState) => state.userStates);
-    
+
     // Separate disclosure hooks for different modal types
     const [attendanceModalOpened, { open: openAttendanceModal, close: closeAttendanceModal }] = useDisclosure(false);
     const [employeeModalOpened, { open: openEmployeeModal, close: closeEmployeeModal }] = useDisclosure(false);
@@ -95,6 +99,7 @@ export function EmployeeDashboardSection() {
                         <span className="w-10">Ref</span>
                         <span className="flex-1">Identity</span>
                         <span className="w-24 text-center">Status</span>
+                        <span className="w-10 text-right">Actions</span>
                     </div>
 
                     <div className="space-y-1">
@@ -107,6 +112,24 @@ export function EmployeeDashboardSection() {
                                 </div>
                                 <div className="w-24 flex justify-center">
                                     <Badge size="xs" variant="light" color="indigo" radius="sm">Verified</Badge>
+                                </div>
+                                <div className="w-10 flex justify-end">
+                                    <Menu shadow="md" width={160} position="bottom-end">
+                                        <Menu.Target>
+                                            <ActionIcon
+                                                variant="subtle"
+                                                color="gray"
+                                                size="md"
+                                                className="rounded-full hover:bg-gray-100 hover:text-[#00A5A8] transition-all duration-200"
+                                            >
+                                                <IconDotsVertical size={18} />
+                                            </ActionIcon>
+                                        </Menu.Target>
+                                        <Menu.Dropdown>
+                                            <Menu.Item leftSection={<IconEdit style={{ width: rem(12), height: rem(12) }} />}>Edit</Menu.Item>
+                                            <Menu.Item color="red" leftSection={<IconTrash style={{ width: rem(12), height: rem(12) }} />}>Remove</Menu.Item>
+                                        </Menu.Dropdown>
+                                    </Menu>
                                 </div>
                             </div>
                         ))}
@@ -123,6 +146,7 @@ export function EmployeeDashboardSection() {
                         <span className="w-10">Ref</span>
                         <span className="flex-1">Identity</span>
                         <span className="w-24 text-center">Protocol</span>
+                        <span className="w-10 text-right">Actions</span>
                     </div>
 
                     <div className="space-y-1">
@@ -135,6 +159,25 @@ export function EmployeeDashboardSection() {
                                 </div>
                                 <div className="w-24 flex justify-center">
                                     <Badge size="xs" variant="gradient" gradient={{ from: 'indigo', to: 'cyan' }} radius="sm">New</Badge>
+                                </div>
+                                <div className="w-10 flex justify-end">
+                                    <Menu shadow="md" width={160} position="bottom-end">
+                                        <Menu.Target>
+                                            <ActionIcon
+                                                variant="subtle"
+                                                color="gray"
+                                                size="md"
+                                                className="rounded-full hover:bg-gray-100 hover:text-[#00A5A8] transition-all duration-200"
+                                            >
+                                                <IconDotsVertical size={18} />
+                                            </ActionIcon>
+                                        </Menu.Target>
+                                        <Menu.Dropdown>
+                                            <Menu.Label>Onboarding</Menu.Label>
+                                            <Menu.Item leftSection={<IconEdit style={{ width: rem(12), height: rem(12) }} />}>Review</Menu.Item>
+                                            <Menu.Item color="red" leftSection={<IconTrash style={{ width: rem(12), height: rem(12) }} />}>Discard</Menu.Item>
+                                        </Menu.Dropdown>
+                                    </Menu>
                                 </div>
                             </div>
                         ))}
